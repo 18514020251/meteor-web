@@ -757,7 +757,7 @@ const rankData = ref([
   opacity: 0; /* 初始隐藏 */
   animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
   /* 使用我们在 HTML 中定义的 --delay 变量 */
-  animation-delay: calc(var(--delay) * 0.1s); 
+  animation-delay: calc(var(--delay) * 0.3s); 
 }
 
 /* 强制覆盖 Element Plus 默认的 margin，确保间距美观 */

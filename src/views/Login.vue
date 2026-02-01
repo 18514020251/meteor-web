@@ -1,10 +1,22 @@
 <template>
   <div class="login-wrapper">
     <div class="login-container">
-      <div class="stars"></div>
-      <div class="meteor-container">
-        <div v-for="n in 8" :key="n" class="meteor"></div>
+      <div class="brand-title-container">
+        <h1 class="meteor-text" data-text="METEOR">METEOR</h1>
+        <div class="sub-text">ADVANCED SYSTEM TERMINAL</div>
       </div>
+      <div class="stars"></div>
+        <div class="meteor-container">
+          <div v-for="n in 8" :key="n" class="meteor"></div>
+        </div>
+      
+        <div class="system-info">
+          <div class="line">SYSTEM STATUS: <span class="active">ONLINE</span></div>
+          <div class="line">ENCRYPTION: AES-256</div>
+          <div class="line">LOCATION: 31.2304° N, 121.4737° E</div>
+        </div>
+      
+        <div class="scan-line"></div>
       
       <el-card shadow="always" class="login-card">
         <div class="card-header">
@@ -46,8 +58,10 @@
         </div>
       </el-card>
 
-      <div class="user-portal" v-if="authStore.userInfo" style="position: absolute; bottom: 20px; color: white;">
-        欢迎回来: <span class="name">{{ authStore.userInfo.username }}</span>
+
+      <div class="user-portal" v-if="authStore.userInfo">
+          <div class="pulse-dot"></div>
+          欢迎回来: <span class="name">{{ authStore.userInfo.username }}</span>
       </div>
     </div>
   </div>
@@ -199,4 +213,167 @@ html, body {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+.system-info {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  font-family: 'Courier New', Courier, monospace;
+  color: rgba(88, 166, 255, 0.4);
+  font-size: 12px;
+  line-height: 1.8;
+  z-index: 2;
+  pointer-events: none; /* 防止遮挡点击 */
+}
+.system-info .active {
+  color: #00ff88;
+  text-shadow: 0 0 5px #00ff88;
+}
+
+/* --- 2. 背景激光扫描线 --- */
+.scan-line {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(88, 166, 255, 0.4), transparent);
+  top: 0;
+  z-index: 1;
+  animation: scan 8s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* --- 3. 登录卡片背后的“光晕” --- */
+/* 给现有的 login-card 增加一个伪元素作为背光 */
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  background: linear-gradient(45deg, #1f4287, transparent, #58a6ff);
+  z-index: -1;
+  border-radius: 15px;
+  opacity: 0.3;
+}
+
+/* --- 4. 底部欢迎语美化 --- */
+.user-portal {
+  position: absolute;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  backdrop-filter: blur(5px);
+  color: #fff;
+  font-size: 14px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: #00ff88;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ff88;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* --- 5. 稍微调整一下原有卡片的边框颜色，呼应深蓝色 --- */
+:deep(.el-input__wrapper) {
+  background-color: rgba(13, 25, 48, 0.6) !important;
+  border: 1px solid rgba(88, 166, 255, 0.3) !important;
+}
+
+:deep(.el-input__inner) {
+  color: #58a6ff !important;
+}
+
+/* --- 标题容器布局 --- */
+.brand-title-container {
+  position: absolute;
+  top: 12%; /* 放在卡片上方 */
+  text-align: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* --- METEOR 大字基础样式 --- */
+.meteor-text {
+  position: relative;
+  font-size: 80px; /* 足够大 */
+  font-weight: 900;
+  color: transparent;
+  margin: 0;
+  padding: 0;
+  letter-spacing: 15px;
+  /* 使用文本描边效果 */
+  -webkit-text-stroke: 1px rgba(88, 166, 255, 0.6);
+  font-family: 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  /* 基础的外发光 */
+  filter: drop-shadow(0 0 15px rgba(88, 166, 255, 0.4));
+  animation: glow 3s ease-in-out infinite alternate;
+}
+
+/* --- 增强：副标题 --- */
+.sub-text {
+  font-size: 12px;
+  color: #58a6ff;
+  letter-spacing: 8px;
+  opacity: 0.6;
+  margin-top: -5px;
+  text-indent: 8px;
+}
+
+/* --- 炫酷动画 1: 霓虹呼吸效果 --- */
+@keyframes glow {
+  from {
+    filter: drop-shadow(0 0 5px rgba(88, 166, 255, 0.4));
+    -webkit-text-stroke: 1px rgba(88, 166, 255, 0.4);
+  }
+  to {
+    filter: drop-shadow(0 0 25px rgba(88, 166, 255, 0.8));
+    -webkit-text-stroke: 1px rgba(173, 211, 255, 1);
+  }
+}
+
+/* --- 炫酷动画 2: 伪元素制造故障闪烁 (Glitch Effect) --- */
+.meteor-text::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  color: #58a6ff;
+  opacity: 0.1;
+  z-index: -1;
+  animation: glitch 4s infinite;
+}
+
+@keyframes glitch {
+  0% { transform: translate(0); }
+  2% { transform: translate(-3px, 2px); opacity: 0.5; }
+  4% { transform: translate(3px, -2px); opacity: 0.5; }
+  6% { transform: translate(0); opacity: 0.1; }
+  100% { transform: translate(0); }
+}
+
+/* 适配移动端或小屏幕 */
+@media (max-height: 800px) {
+  .meteor-text { font-size: 60px; }
+  .brand-title-container { top: 8%; }
+}
 </style>
