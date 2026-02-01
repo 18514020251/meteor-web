@@ -38,7 +38,40 @@ onMounted(() => {
 watch(() => route.path, (newPath) => {
   activeIndex.value = newPath
 }, { immediate: true })
+
+onMounted(() => {
+  // 1. 禁用右键菜单
+  window.oncontextmenu = (e) => {
+    e.preventDefault();
+    ElMessage({
+      message: '>>> CRITICAL: CONTEXT_MENU_LOCKED. TERMINAL ACCESS ONLY.',
+      type: 'warning',
+      duration: 1500,
+      offset: 20
+    });
+  };
+
+  // 2. 禁用 F12 和常用开发者工具快捷键
+  window.onkeydown = (e) => {
+    if (
+      e.keyCode === 123 || // F12
+      (e.ctrlKey && e.shiftKey && e.keyCode === 73) || // Ctrl+Shift+I
+      (e.ctrlKey && e.shiftKey && e.keyCode === 74) || // Ctrl+Shift+J
+      (e.ctrlKey && e.keyCode === 85) // Ctrl+U (查看源代码)
+    ) {
+      return false;
+    }
+  };
+
+
+  if (authStore.token) {
+    authStore.initUserInfo()
+  }
+  
+})
+
 </script>
+
 
 <style>
 /* 1. 彻底清除基础样式，取消 body 的 flex 居中 */
@@ -229,6 +262,8 @@ html, body {
 .el-loading-spinner .circular {
   display: none;
 }
+
+
 
 @keyframes scanning {
   from { background-position: 0 -100vh; }
