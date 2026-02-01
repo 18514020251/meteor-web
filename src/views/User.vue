@@ -10,14 +10,20 @@
         <div class="nav-content">
           <div class="brand">METEOR <span class="sub">CINEMA</span></div>
           
-          <div class="user-portal" v-if="userData">
-            <div class="user-text">
-              <span class="name">{{ userData.username }}</span>
-              <span class="role">UID: 00{{ userData.userId }}</span>
+            <div class="user-portal" v-if="userData">
+              <div class="user-text">
+                <span class="name">{{ userData.username }}</span>
+                <span class="role">UID: {{ userData.userId || '000' }}</span>
+              </div>
+              <el-avatar :size="42" :src="userData.avatar" class="avatar-glow" />
+
+              <el-button 
+                link 
+                class="exit-btn" 
+                :icon="SwitchButton" 
+                @click="handleLogout"
+              ></el-button>
             </div>
-            <el-avatar :size="42" :src="userData.avatar" class="avatar-glow" />
-            <el-button link class="exit-btn" :icon="SwitchButton"></el-button>
-          </div>
         </div>
       </header>
 
@@ -76,18 +82,51 @@
         </el-row>
       </main>
     </div>
+
+    <transition name="fade">
+      <div v-if="showLogoutConfirm" class="logout-overlay">
+       <div class="logout-glass-card">
+       <div class="logout-icon">
+            <el-icon><Warning /></el-icon>
+         </div>
+          <h3>确认退出系统？</h3>
+          <p>退出后将断开与 METEOR 的实时同步</p>
+      
+         <div class="logout-actions">
+           <button class="btn-cancel" @click="showLogoutConfirm = false">取消</button>
+            <button class="btn-confirm" @click="confirmLogout">确认退出</button>
+          </div>
+       </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { VideoCamera, DataLine, SwitchButton } from '@element-plus/icons-vue'
+import { useAuthStore } from '../stores/auth'
+import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 
-const userData = ref({
-  userId: 3,
-  username: "test1",
-  avatar: "http://127.0.0.1:9000/meteor/avatar/default.png?..." // 你的接口地址
-})
+const authStore = useAuthStore()
+const router = useRouter()
+
+// --- 这里是核心改动：不再写死，而是指向 store 里的数据 ---
+const userData = authStore.userInfo
+const showLogoutConfirm = ref(false)
+// 退出登录
+// 点击退出按钮触发
+const handleLogout = () => {
+  showLogoutConfirm.value = true
+}
+
+// 确认退出的逻辑
+const confirmLogout = () => {
+  authStore.logout()
+  router.push('/login')
+}
 
 const hotMovies = ref([
   { id: 1, title: '流浪地球 3', type: '科幻/冒险', score: '9.3', isFlash: true, poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&auto=format' },
@@ -105,6 +144,11 @@ const rankData = ref([
   { name: '奥本海默', hot: '5421' },
   { name: '沙丘', hot: '4322' }
 ])
+const handleGrab = (movie) => {
+  console.log('开始抢购：', movie.title)
+}
+
+
 </script>
 
 <style scoped>
@@ -221,4 +265,62 @@ const rankData = ref([
 .meteor-container { position: fixed; width: 100%; height: 100%; transform: rotateZ(45deg); z-index: 1; pointer-events: none; }
 .meteor { position: absolute; height: 2px; background: linear-gradient(-45deg, #5f91ff, rgba(0, 0, 255, 0)); animation: shooting 3000ms ease-in-out infinite; opacity: 0; }
 @keyframes shooting { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translateX(400px); opacity: 0; } }
+/* 弹窗遮罩层 */
+.logout-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px); /* 背景模糊 */
+  z-index: 999;
+  display: flex; justify-content: center; align-items: center;
+}
+
+/* 弹窗主体卡片 */
+.logout-glass-card {
+  width: 360px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(64, 158, 255, 0.3); /* 蓝色半透明边框 */
+  border-radius: 20px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(64, 158, 255, 0.2); /* 蓝色外发光 */
+  animation: scaleUp 0.3s ease-out;
+}
+
+.logout-icon {
+  font-size: 40px;
+  color: #f56c6c;
+  margin-bottom: 15px;
+  filter: drop-shadow(0 0 10px rgba(245, 108, 108, 0.5));
+}
+
+.logout-glass-card h3 { color: #fff; margin: 0 0 10px 0; font-weight: 400; letter-spacing: 2px; }
+.logout-glass-card p { color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-bottom: 30px; }
+
+/* 按钮组 */
+.logout-actions { display: flex; gap: 15px; }
+
+.logout-actions button {
+  flex: 1; height: 40px; border-radius: 10px; border: none;
+  cursor: pointer; transition: all 0.3s; font-size: 14px;
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.1); color: #fff;
+}
+.btn-cancel:hover { background: rgba(255, 255, 255, 0.2); }
+
+.btn-confirm {
+  background: linear-gradient(45deg, #409eff, #3a8ee6);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
+}
+.btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6); }
+
+/* 动画 */
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 </style>
