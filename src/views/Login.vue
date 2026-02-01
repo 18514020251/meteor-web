@@ -28,13 +28,13 @@
             <div v-if="activeTab === 'login'" key="login">
               <el-form :model="loginForm" label-position="top">
                 <el-form-item label="用户名">
-                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User" @keyup.enter="handleLogin"></el-input>
+                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User" @keyup.enter="handleLogin", class="neon-input"></el-input>
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin"></el-input>
+                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" , class="neon-input"></el-input>
                 </el-form-item>
                 <div class="action-buttons">
-                  <el-button type="primary" class="main-button" :loading="loading" @click="handleLogin">立即登录</el-button>
+                  <el-button type="primary" class="main-button breath-btn" :loading="loading" @click="handleLogin">立即登录</el-button>
                   <el-button link class="switch-button" @click="switchToRegister">没有账号？去注册</el-button>
                 </div>
               </el-form>
@@ -43,13 +43,13 @@
             <div v-else key="register">
               <el-form :model="registerForm" label-position="top">
                 <el-form-item label="用户名">
-                  <el-input v-model="registerForm.username" placeholder="设置用户名" :prefix-icon="User"></el-input>
+                  <el-input v-model="registerForm.username" placeholder="设置用户名" :prefix-icon="User" , class="neon-input"></el-input>
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="registerForm.password" type="password" placeholder="设置密码" :prefix-icon="Lock" show-password></el-input>
+                  <el-input v-model="registerForm.password" type="password" placeholder="设置密码" :prefix-icon="Lock" show-password , class="neon-input"></el-input>
                 </el-form-item>
                 <div class="action-buttons">
-                  <el-button type="success" class="main-button" :loading="loading" @click="handleRegister">提交注册</el-button>
+                  <el-button type="success" class="main-button breath-btn" :loading="loading" @click="handleRegister">提交注册</el-button>
                   <el-button link class="switch-button" @click="switchToLogin">已有账号？去登录</el-button>
                 </div>
               </el-form>
@@ -375,5 +375,101 @@ html, body {
 @media (max-height: 800px) {
   .meteor-text { font-size: 60px; }
   .brand-title-container { top: 8%; }
+}
+
+:deep(.neon-input .el-input__wrapper) {
+  background-color: rgba(10, 20, 40, 0.6) !important;
+  border: 1px solid rgba(88, 166, 255, 0.2) !important;
+  box-shadow: none !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:deep(.neon-input .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 12px rgba(88, 166, 255, 0.4) !important;
+  border-color: rgba(88, 166, 255, 0.8) !important;
+  background-color: rgba(20, 40, 80, 0.8) !important;
+}
+
+:deep(.el-input__inner) {
+  caret-color: #58a6ff; /* 蓝色光标 */
+}
+
+:deep(.neon-input .el-input__wrapper.is-focus .el-input__prefix-icon) {
+  color: #58a6ff !important;
+  filter: drop-shadow(0 0 5px #58a6ff);
+  transform: scale(1.1);
+}
+
+/* --- 按钮基础样式重塑 --- */
+.breath-btn {
+  position: relative;
+  border: 1px solid rgba(88, 166, 255, 0.4) !important;
+  background: linear-gradient(180deg, rgba(30, 60, 120, 0.6) 0%, rgba(10, 20, 40, 0.8) 100%) !important;
+  overflow: hidden;
+  transition: all 0.5s ease;
+  color: #fff;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* --- 呼吸动画：通过改变内阴影的扩散半径 --- */
+.breath-btn {
+  animation: button-breath 3s infinite alternate ease-in-out;
+}
+
+@keyframes button-breath {
+  0% {
+    /* 初始状态：淡淡的内光 */
+    box-shadow: 
+      inset 0 0 10px rgba(88, 166, 255, 0.2),
+      0 0 5px rgba(88, 166, 255, 0.1);
+    border-color: rgba(88, 166, 255, 0.3);
+  }
+  100% {
+    /* 呼吸顶点：强烈的内流光 + 轻微外扩（不改变尺寸） */
+    box-shadow: 
+      inset 0 0 25px rgba(88, 166, 255, 0.6),
+      0 0 15px rgba(88, 166, 255, 0.3);
+    border-color: rgba(173, 211, 255, 0.8);
+    background: rgba(40, 80, 160, 0.6) !important;
+  }
+}
+
+/* --- 鼠标悬停：瞬间过载激发 --- */
+.breath-btn:hover {
+  animation: none; /* 悬停时停止呼吸，切换到稳定高亮 */
+  background: #409eff !important;
+  box-shadow: 
+    inset 0 0 40px rgba(255, 255, 255, 0.4),
+    0 0 25px rgba(64, 158, 255, 0.6) !important;
+  transform: translateY(-1px); /* 极其轻微的悬浮感，不产生滚动条 */
+}
+
+/* --- 点击时的反馈 --- */
+.breath-btn:active {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(1.2);
+}
+
+.breath-btn::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -150%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  transform: rotate(45deg);
+  animation: sweep 4s infinite;
+}
+
+@keyframes sweep {
+  0% { left: -150%; }
+  30%, 100% { left: 250%; }
 }
 </style>
