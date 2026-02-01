@@ -112,23 +112,28 @@
               </el-upload>
             </div>
 
-            <el-form label-position="top" class="custom-form">
-              <el-form-item label="用户名">
-                <el-input v-model="profileForm.username" placeholder="请输入新用户名" />
-              </el-form-item>
-              <el-form-item label="手机号">
-                <el-input v-model="profileForm.phone" placeholder="绑定手机号" />
-              </el-form-item>
-              <el-form-item label="验证码">
-                <div class="code-input-group">
-                  <el-input v-model="profileForm.code" placeholder="输入验证码" />
-                  <el-button type="primary" plain :disabled="countdown > 0" @click="sendCode">
-                    {{ countdown > 0 ? countdown + 's' : '获取' }}
-                  </el-button>
-                </div>
-              </el-form-item>
-              <el-button type="primary" class="save-btn" @click="handleUpdate">保存资料</el-button>
-            </el-form>
+<el-form label-position="top" class="custom-form">
+  <el-form-item label="用户名" class="fade-in-item" style="--delay: 1">
+    <el-input v-model="profileForm.username" placeholder="请输入新用户名" :prefix-icon="User" />
+  </el-form-item>
+
+  <el-form-item label="手机号" class="fade-in-item" style="--delay: 2">
+    <el-input v-model="profileForm.phone" placeholder="绑定手机号" :prefix-icon="Iphone" />
+  </el-form-item>
+
+  <el-form-item label="验证码" class="fade-in-item" style="--delay: 3">
+    <div class="code-input-group">
+      <el-input v-model="profileForm.code" placeholder="输入验证码" :prefix-icon="Lock" />
+      <el-button class="get-code-btn" :disabled="countdown > 0" @click="sendCode">
+        {{ countdown > 0 ? countdown + 's' : '获取' }}
+      </el-button>
+    </div>
+  </el-form-item>
+
+  <el-button type="primary" class="save-btn fade-in-item" style="--delay: 4" @click="handleUpdate">
+    保存资料
+  </el-button>
+</el-form>
           </div>
         </div>
       </div>
@@ -522,8 +527,42 @@ const rankData = ref([
 }
 .panel-header { display: flex; justify-content: space-between; color: #fff; margin-bottom: 30px; }
 .close-icon { cursor: pointer; font-size: 20px; }
-.code-input-group { display: flex; gap: 8px; }
-.save-btn { width: 100%; margin-top: 20px; }
+.code-input-group {
+  display: flex;
+  gap: 12px;
+}
+.code-input-group .el-button {
+  background: rgba(64, 158, 255, 0.1);
+  border: 1px solid rgba(64, 158, 255, 0.4);
+  color: #409eff;
+  border-radius: 8px;
+  transition: 0.3s;
+}
+.code-input-group .el-button:hover:not(:disabled) {
+  background: #409eff;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
+}
+.save-btn {
+  width: 100%;
+  height: 45px;
+  margin-top: 30px;
+  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); /* 经典深海蓝渐变 */
+  border: none;
+  font-weight: bold;
+  letter-spacing: 4px;
+  box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
+  transition: 0.4s;
+}
+
+.save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6);
+  filter: brightness(1.2);
+}
+:deep(.el-form-item) {
+  margin-bottom: 25px;
+}
 
 .glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 25px; }
 .section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
@@ -656,5 +695,73 @@ const rankData = ref([
 :deep(.el-image-viewer__mask) {
   background: rgba(0, 0, 0, 0.8) !important;
   backdrop-filter: blur(10px);
+}
+
+.custom-form {
+  margin-top: 30px;
+  padding: 0 5px;
+}
+
+/* 标签文字优化：改为深青蓝色，带一点科技感 */
+:deep(.el-form-item__label) {
+  color: #70c0ff !important; /* 淡青蓝 */
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  font-size: 13px;
+  margin-bottom: 8px !important;
+  text-transform: uppercase; /* 大写字母更像 UI 界面 */
+}
+
+/* --- 文本框重塑 --- */
+:deep(.el-input__wrapper) {
+  background-color: rgba(10, 25, 47, 0.6) !important; /* 深海蓝透明底 */
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important; /* 微弱边框 */
+  border-radius: 8px;
+  padding: 5px 12px;
+  transition: all 0.3s ease;
+}
+
+/* 文本框聚焦时的呼吸光效 */
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
+  background-color: rgba(10, 25, 47, 0.8) !important;
+}
+
+/* 输入框文字颜色 */
+:deep(.el-input__inner) {
+  color: #ffffff !important;
+  font-family: 'Inter', sans-serif;
+}
+
+/* 占位符颜色 */
+:deep(.el-input__inner::placeholder) {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* 定义入场动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* 从下方20像素处开始 */
+    filter: blur(5px); /* 增加一点模糊感，更有科技味 */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 应用于每一项 */
+.fade-in-item {
+  opacity: 0; /* 初始隐藏 */
+  animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  /* 使用我们在 HTML 中定义的 --delay 变量 */
+  animation-delay: calc(var(--delay) * 0.1s); 
+}
+
+/* 强制覆盖 Element Plus 默认的 margin，确保间距美观 */
+:deep(.el-form-item) {
+  margin-bottom: 22px !important;
 }
 </style>
