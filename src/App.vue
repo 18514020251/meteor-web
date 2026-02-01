@@ -214,6 +214,15 @@ html, body {
   background: transparent;
 }
 
+.main-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(0, 255, 136, 0.5), /* 加入一点点成功绿，模拟能量流动 */
+    transparent
+  );
+}
+
 /* 2. 针对 Firefox 的隐藏方式 */
 .main-content {
   scrollbar-width: none; /* Firefox */
@@ -273,5 +282,37 @@ html, body {
 .footer-content p {
   margin: 0;
   font-size: 12px;
+}
+
+/* --- 全局滚动条重塑 --- */
+::-webkit-scrollbar {
+  width: 6px;  /* 纵向滚动条宽度 */
+  height: 6px; /* 横向滚动条高度 */
+}
+
+/* 滚动条轨道：深色透明，保持背景纯净 */
+::-webkit-scrollbar-track {
+  background: rgba(9, 10, 15, 0.5);
+  border-radius: 10px;
+}
+
+/* 滚动条滑块：幽蓝色发光线条 */
+::-webkit-scrollbar-thumb {
+  background: rgba(88, 166, 255, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(88, 166, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* 鼠标悬停时：滑块加亮，增加互动感 */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(88, 166, 255, 0.6);
+  box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+}
+
+/* 针对 Firefox 的兼容处理 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(88, 166, 255, 0.3) rgba(9, 10, 15, 0.5);
 }
 </style>

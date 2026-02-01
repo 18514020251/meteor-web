@@ -21,7 +21,10 @@
       
       <el-card shadow="always" class="login-card">
         <div class="card-header">
-          <h2>{{ activeTab === 'login' ? '欢迎回来' : '创建账号' }}</h2>
+          <div class="system-status">STATUS: {{ activeTab === 'login' ? 'STABLE' : 'STANDBY' }}</div>
+          <h2 class="glitch-text" :data-text="activeTab === 'login' ? 'AUTH_REQUIRED' : 'INITIALIZING...'">
+            {{ activeTab === 'login' ? 'AUTH_REQUIRED' : 'INITIALIZING...' }}
+          </h2>
         </div>
         
         <div class="card-body">
@@ -597,5 +600,40 @@ html, body {
     rgba(0, 255, 136, 0.1) 0%,
     transparent 70%
   );
+}
+
+.card-header h2 {
+  font-family: 'Consolas', monospace;
+  color: #58a6ff;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  position: relative;
+  text-shadow: 0 0 10px rgba(88, 166, 255, 0.7);
+}
+
+/* 增加一个小状态灯 */
+.system-status {
+  font-size: 10px;
+  color: #00ff88;
+  margin-bottom: 5px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.system-status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #00ff88;
+  border-radius: 50%;
+  margin-right: 8px;
+  box-shadow: 0 0 8px #00ff88;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
 }
 </style>
