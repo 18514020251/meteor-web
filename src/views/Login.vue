@@ -2,7 +2,6 @@
   <div class="login-wrapper">
     <div class="login-container">
       <div class="stars"></div>
-      
       <div class="meteor-container">
         <div v-for="n in 8" :key="n" class="meteor"></div>
       </div>
@@ -46,6 +45,10 @@
           </transition>
         </div>
       </el-card>
+
+      <div class="user-portal" v-if="authStore.userInfo" style="position: absolute; bottom: 20px; color: white;">
+        欢迎回来: <span class="name">{{ authStore.userInfo.username }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -59,60 +62,47 @@ import { useRouter } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const activeTab = ref('login')
 const loading = ref(false)
 
 const loginForm = reactive({ username: '', password: '' })
 const registerForm = reactive({ username: '', password: '' })
 
-// --- 参数校验函数 ---
 const validateForm = (form) => {
-  if (!form.username || form.username.trim() === '') {
-    ElMessage.warning('用户名不能为空')
-    return false
-  }
-  if (!form.password || form.password.length < 6 || form.password.length > 20) {
-    ElMessage.warning('密码长度必须在 6-20 之间')
-    return false
-  }
+  if (!form.username?.trim()) { ElMessage.warning('用户名不能为空'); return false }
+  if (!form.password || form.password.length < 6) { ElMessage.warning('密码不少于6位'); return false }
   return true
 }
 
 const handleLogin = () => {
-  if (!validateForm(loginForm)) return // 校验不通过则拦截
-
+  if (!validateForm(loginForm)) return 
   loading.value = true
+  
   http.post('/user/login', loginForm)
-    .then(token => {
-      const authStore = useAuthStore()
-      authStore.setToken(token)
-      ElMessage.success('登录成功')
-      router.push('/loading')
-    })
-    .catch(err => {
-      console.error(err)
-      // 如果后端返回了错误信息，这里会自动弹出（取决于你的 http.js 封装）
+    .then(async token => {
+      authStore.setToken(token) 
+      // 登录成功直接去加载页，不在这里做判断
+      ElMessage.success('登录成功，正在进入系统...')
+      router.push('/loading') 
     })
     .finally(() => loading.value = false)
 }
 
 const handleRegister = () => {
-  if (!validateForm(registerForm)) return // 校验不通过则拦截
-
+  if (!validateForm(registerForm)) return 
   loading.value = true
   http.post('/user/register', registerForm)
     .then(() => {
       ElMessage.success('注册成功')
       activeTab.value = 'login'
     })
-    .catch(err => console.error(err))
     .finally(() => loading.value = false)
 }
 
 const switchToRegister = () => { activeTab.value = 'register' }
 const switchToLogin = () => { activeTab.value = 'login' }
 </script>
-
 <style>
 html, body {
   margin: 0; padding: 0;

@@ -210,18 +210,73 @@ const handleGrab = (movie) => {
   gap: 20px;
 }
 
+/* 1. 基础卡片容器微调 */
 .glass-card {
+  position: relative; /* 必须为 relative，供流光定位 */
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  /* 移除原有的普通 border，改用透明边框占位 */
+  border: 1px solid rgba(255, 255, 255, 0.1); 
   transition: all 0.3s ease;
+  z-index: 1;
 }
 
+/* 2. 创建流光伪元素 */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  /* 只有在 hover 时才显示流光 */
+  background: conic-gradient(
+    transparent, 
+    rgba(64, 158, 255, 0.8), 
+    #409eff, 
+    transparent 30%
+  );
+  animation: rotate-stream 4s linear infinite;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: -1; /* 放在内容后面 */
+}
+
+/* 3. 使用 mask 遮罩，只让边框部分显示流光 */
+/* 这是实现“流光边框”最干净的方法 */
+.glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 2px; /* 这里的数值决定了边框的粗细 */
+  background: #1a1f2b; /* 这里的颜色要和卡片背景色一致 */
+  border-radius: 10px;
+  z-index: -1;
+}
+
+/* 4. Hover 触发效果 */
 .glass-card:hover {
   transform: translateY(-8px);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #409eff;
+  border-color: transparent; /* 隐藏原边框 */
+  box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+}
+
+.glass-card:hover::before {
+  opacity: 1;
+}
+
+/* 5. 定义旋转动画 */
+@keyframes rotate-stream {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 6. 强化海报框，确保内容不被伪元素遮挡 */
+.poster-box {
+  position: relative;
+  z-index: 2;
+}
+.info-box {
+  position: relative;
+  z-index: 2;
 }
 
 .poster-box { position: relative; height: 240px; }

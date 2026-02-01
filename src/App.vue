@@ -18,22 +18,26 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'App',
-  data() {
-    return { activeIndex: '/' }
-  },
-  watch: {
-    $route: {
-      handler() { this.activeIndex = this.$route.path },
-      immediate: true
-    }
-  },
-  methods: {
-    handleSelect(key) { this.$router.push(key) }
+<script setup>
+import { onMounted, watch, ref } from 'vue'
+import { useAuthStore } from './stores/auth'
+import { useRoute, useRouter } from 'vue-router'
+
+const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const activeIndex = ref('/')
+
+// 核心逻辑：刷新页面时触发
+onMounted(() => {
+  if (authStore.token) {
+    authStore.initUserInfo()
   }
-}
+})
+
+watch(() => route.path, (newPath) => {
+  activeIndex.value = newPath
+}, { immediate: true })
 </script>
 
 <style>
