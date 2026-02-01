@@ -135,18 +135,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watchEffect} from 'vue'
+import { ref, reactive, computed, watchEffect, onBeforeUnmount } from 'vue'
 import { VideoCamera, DataLine, SwitchButton, Warning, Close } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
+import http from '../request/http' // 按你项目实际路径：你 store 里是 ../request/http
+
 const router = useRouter()
-
-
 const authStore = useAuthStore()
 const { userInfo: userData } = storeToRefs(authStore)
 
+/** ========== 顶部展示：是否有手机号 + 脱敏 ========== */
 const hasPhone = computed(() => {
   const p = userData.value?.phone
   return !!(p && String(p).trim())
@@ -155,16 +156,16 @@ const hasPhone = computed(() => {
 const maskedPhone = computed(() => {
   const p = String(userData.value?.phone || '')
   if (!p) return ''
-  return p.length >= 7
-    ? `${p.slice(0, 3)}****${p.slice(-4)}`
-    : p
+  return p.length >= 7 ? `${p.slice(0, 3)}****${p.slice(-4)}` : p
 })
 
-
+/** ========== UI 状态 ========== */
 const showLogoutConfirm = ref(false)
 const showProfilePanel = ref(false)
 const countdown = ref(0)
+let countdownTimer = null
 
+/** ========== 表单 ========== */
 const profileForm = reactive({
   username: '',
   phone: '',
@@ -177,42 +178,116 @@ watchEffect(() => {
   profileForm.phone = userData.value.phone || ''
 })
 
-const sendCode = () => {
-  ElMessage.success('验证码已发送')
+/** ========== 倒计时 ========== */
+const startCountdown = () => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
   countdown.value = 60
-  const timer = setInterval(() => {
+  countdownTimer = setInterval(() => {
     countdown.value--
-    if (countdown.value <= 0) clearInterval(timer)
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      countdown.value = 0
+    }
   }, 1000)
 }
 
+onBeforeUnmount(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+})
+
+/** ========== 获取验证码：校验 + 调接口 ========== */
+const sendCode = async () => {
+  // 正在倒计时就别点了
+  if (countdown.value > 0) return
+
+  const phone = String(profileForm.phone || '').trim()
+  const phoneReg = /^1\d{10}$/ // 简单校验：1开头11位
+
+  if (!phone) {
+    ElMessage.warning('请先输入手机号')
+    return
+  }
+  if (!phoneReg.test(phone)) {
+    ElMessage.warning('手机号格式不正确')
+    return
+  }
+
+  const payload = {
+    phone,
+    scene: 'RESET_PASSWORD' // 固定参数
+  }
+
+  // 你要求带 X-Forwarded-For：前端拿不到真实公网IP，这里按你说的从 localStorage 拿
+  const clientIp = localStorage.getItem('clientIp') || ''
+
+  try {
+    // 注意：你的 http 响应拦截器 code==200 会 return res.data（此接口 data=null）
+    // 所以这里成功时返回值就是 null，不代表失败，只要不抛异常就是成功
+    if (clientIp) {
+      await http.post('/user/phone/code', payload, {
+        headers: { 'X-Forwarded-For': clientIp }
+      })
+    } else {
+      await http.post('/user/phone/code', payload)
+    }
+
+    ElMessage.success('验证码已发送')
+    startCountdown()
+  } catch (e) {
+    // 失败提示 http 的拦截器已经弹过一次了，这里别重复弹到用户想砸电脑
+    // 你要是想更明确也可以放开这一行：
+    // ElMessage.error('发送失败，请稍后重试')
+  }
+}
+
+/** ========== 保存资料（你还没接后端，就先保留占位） ========== */
 const handleUpdate = () => {
-  ElMessage.success('更新成功')
+  ElMessage.success('更新成功（保存接口还没接）')
   showProfilePanel.value = false
 }
 
-const handleLogout = () => { showLogoutConfirm.value = true }
-const confirmLogout = () => { 
-  authStore.logout(); 
-  router.push('/login');
-  showLogoutConfirm.value = false;
+/** ========== 退出登录 ========== */
+const handleLogout = () => {
+  showLogoutConfirm.value = true
 }
 
+const confirmLogout = () => {
+  authStore.logout()
+  router.push('/login')
+  showLogoutConfirm.value = false
+}
+
+/** ========== 抢票按钮（占位） ========== */
 const handleGrab = (movie) => {
   ElMessage.info(`正在尝试${movie.isFlash ? '抢购' : '预约'}: ${movie.title}`)
 }
 
-// 电影数据
+/** ========== 假数据 ========== */
 const hotMovies = ref([
   { id: 1, title: '流浪地球 3', type: '科幻/冒险', score: '9.3', isFlash: true, poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300' },
   { id: 2, title: '奥本海默', type: '剧情/传记', score: '8.8', isFlash: false, poster: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=300' },
   { id: 3, title: '星际穿越', type: '科幻', score: '9.6', isFlash: true, poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300' },
   { id: 4, title: '复仇者联盟', type: '英雄', score: '9.0', isFlash: true, poster: 'https://images.unsplash.com/photo-1509281373149-e957c6296406?w=300' },
   { id: 5, title: '沙丘', type: '战争', score: '9.1', isFlash: false, poster: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300' },
-  { id: 6, title: '蝙蝠侠', type: '动作', score: '8.7', isFlash: true, poster: 'https://images.unsplash.com/photo-1531259683007-016a7b628fc3?w=300' },
+  { id: 6, title: '蝙蝠侠', type: '动作', score: '8.7', isFlash: true, poster: 'https://images.unsplash.com/photo-1531259683007-016a7b628fc3?w=300' }
 ])
-const rankData = ref([{ name: '流浪地球 3', hot: '9982' }, { name: '星际穿越', hot: '8721' }, { name: '复仇者联盟', hot: '7655' }, { name: '奥本海默', hot: '5421' }, { name: '沙丘', hot: '4322' }])
+
+const rankData = ref([
+  { name: '流浪地球 3', hot: '9982' },
+  { name: '星际穿越', hot: '8721' },
+  { name: '复仇者联盟', hot: '7655' },
+  { name: '奥本海默', hot: '5421' },
+  { name: '沙丘', hot: '4322' }
+])
 </script>
+
 
 <style scoped>
 /* ================== 1. 布局与背景 ================== */
