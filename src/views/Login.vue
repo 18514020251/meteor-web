@@ -1,11 +1,12 @@
 <template>
   <div class="login-wrapper">
-    <div class="login-container">
+    <div class="login-container" @mousemove="handleMouseMove">
+      <div class="cursor-glow" :style="cursorStyle"></div>
       <div class="brand-title-container">
         <h1 class="meteor-text" data-text="METEOR">METEOR</h1>
         <div class="sub-text">ADVANCED SYSTEM TERMINAL</div>
       </div>
-      <div class="stars"></div>
+      <div class="stars" :style="{ transform: bgTransform }"></div>
         <div class="meteor-container">
           <div v-for="n in 8" :key="n" class="meteor"></div>
         </div>
@@ -60,15 +61,18 @@
 
 
       <div class="user-portal" v-if="authStore.userInfo">
+        <div class="id-scanner-tag">
           <div class="pulse-dot"></div>
-          欢迎回来: <span class="name">{{ authStore.userInfo.username }}</span>
+          <span class="status-text">IDENTITY CONFIRMED:</span>
+          <span class="name">{{ authStore.userInfo.username }}</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue' // 确保引入了 computed
 import { useAuthStore } from '../stores/auth'
 import http from '../request/http'
 import { ElMessage } from 'element-plus'
@@ -77,9 +81,29 @@ import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 1. 响应式坐标
+const cursorPosition = ref({ x: 0, y: 0 })
+
+// 2. 鼠标移动监听（只负责更新坐标）
+const handleMouseMove = (e) => {
+  cursorPosition.value = { x: e.clientX, y: e.clientY }
+}
+
+// 3. 计算属性：光标跟随样式（放在顶层）
+const cursorStyle = computed(() => ({
+  transform: `translate(${cursorPosition.value.x - 150}px, ${cursorPosition.value.y - 150}px)`
+}))
+
+// 4. 计算属性：星空视差偏移（放在顶层）
+const bgTransform = computed(() => {
+  const moveX = (cursorPosition.value.x - window.innerWidth / 2) / 50
+  const moveY = (cursorPosition.value.y - window.innerHeight / 2) / 50
+  return `translate(${moveX}px, ${moveY}px) scale(1.1)`
+})
+
 const activeTab = ref('login')
 const loading = ref(false)
-
 const loginForm = reactive({ username: '', password: '' })
 const registerForm = reactive({ username: '', password: '' })
 
@@ -97,7 +121,11 @@ const handleLogin = () => {
     .then(async token => {
       authStore.setToken(token) 
       // 登录成功直接去加载页，不在这里做判断
-      ElMessage.success('登录成功，正在进入系统...')
+      ElMessage({
+        message: '[SYSTEM] AUTH_SUCCESS: 正在接入终端...',
+        type: 'success',
+        plain: true // 开启纯净模式，方便样式覆盖
+      })
       router.push('/loading') 
     })
     .finally(() => loading.value = false)
@@ -471,5 +499,103 @@ html, body {
 @keyframes sweep {
   0% { left: -150%; }
   30%, 100% { left: 250%; }
+}
+
+/* --- User 模块外层容器 --- */
+.user-portal {
+  position: absolute;
+  bottom: 40px;
+  z-index: 10;
+}
+
+/* --- ID 标签样式：绿色科技感 --- */
+.id-scanner-tag {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background: rgba(0, 40, 20, 0.4) !important; /* 深绿背景 */
+  border: 1px solid rgba(0, 255, 136, 0.3) !important;
+  border-radius: 4px;
+  color: #00ff88; /* 经典的黑客绿 */
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  
+  /* 基础内阴影 */
+  box-shadow: inset 0 0 10px rgba(0, 255, 136, 0.1);
+  
+  /* 核心：绿色呼吸动画 */
+  animation: id-breath 3s infinite alternate ease-in-out;
+  backdrop-filter: blur(5px);
+}
+
+.status-text {
+  opacity: 0.7;
+}
+
+.name {
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+/* --- 绿光呼吸动画 --- */
+@keyframes id-breath {
+  0% {
+    box-shadow: 
+      inset 0 0 5px rgba(0, 255, 136, 0.2),
+      0 0 5px rgba(0, 255, 136, 0.1);
+    border-color: rgba(0, 255, 136, 0.2);
+  }
+  100% {
+    box-shadow: 
+      inset 0 0 15px rgba(0, 255, 136, 0.4),
+      0 0 12px rgba(0, 255, 136, 0.2);
+    border-color: rgba(0, 255, 136, 0.6);
+  }
+}
+
+/* --- 保持那个绿色小圆点 --- */
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: #00ff88;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ff88;
+  animation: dot-pulse 1.5s infinite;
+}
+
+@keyframes dot-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.cursor-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 300px;  /* 扩散半径 */
+  height: 300px;
+  background: radial-gradient(
+    circle,
+    rgba(88, 166, 255, 0.15) 0%,
+    rgba(88, 166, 255, 0.05) 40%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none; /* 关键：不干扰鼠标点击 */
+  z-index: 100; /* 位于星空之上，卡片之下 */
+  transition: transform 0.1s ease-out; /* 增加一点延迟感，更像引力场 */
+  mix-blend-mode: screen; /* 混合模式：让它只点亮背景，不遮挡内容 */
+}
+
+/* 进阶互动：当鼠标移入卡片区域时，光晕可以稍微缩小或改变颜色 */
+.login-card:hover ~ .cursor-glow {
+  background: radial-gradient(
+    circle,
+    rgba(0, 255, 136, 0.1) 0%,
+    transparent 70%
+  );
 }
 </style>
