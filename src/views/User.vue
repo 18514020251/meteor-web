@@ -15,19 +15,20 @@
               <span class="name">{{ userData.username }}</span>
               <span class="role">UID: {{ userData.userId || '000' }}</span>
                 <span class="phone" v-if="hasPhone">
-                  📱 {{ maskedPhone }}
+                  {{ maskedPhone }}
                 </span>
                 <span class="phone phone-missing" v-else @click="showProfilePanel = true">
                   未绑定手机号（点我去绑）
                 </span>
             </div>
             
-            <el-avatar 
-              :size="42" 
-              :src="userData.avatar" 
-              class="avatar-glow clickable" 
+            <el-avatar
+              :size="42"
+              :src="userData.avatar"
+              class="avatar-glow clickable"
               @click="showProfilePanel = true"
             />
+
             <el-button link class="exit-btn" :icon="SwitchButton" @click="handleLogout"></el-button>
           </div>
         </div>
@@ -94,6 +95,16 @@
             <div class="avatar-edit-section">
               <el-avatar :size="80" :src="userData.avatar" class="avatar-glow" />
               <p class="uid-tag">ID: {{ userData.userId }}</p>
+                        
+              <el-upload
+                :show-file-list="false"
+                :before-upload="beforeAvatarUpload"
+                :http-request="uploadAvatar"
+              >
+                <el-button size="small" type="primary" plain>
+                  修改头像
+                </el-button>
+              </el-upload>
             </div>
 
             <el-form label-position="top" class="custom-form">
@@ -141,13 +152,14 @@ import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
-import http from '../request/http' // 按你项目实际路径：你 store 里是 ../request/http
+import http from '../request/http'
 
+/** ========== 基础 ========== */
 const router = useRouter()
 const authStore = useAuthStore()
 const { userInfo: userData } = storeToRefs(authStore)
 
-/** ========== 顶部展示：是否有手机号 + 脱敏 ========== */
+/** ========== 手机号展示（是否有手机号 + 脱敏） ========== */
 const hasPhone = computed(() => {
   const p = userData.value?.phone
   return !!(p && String(p).trim())
@@ -169,7 +181,7 @@ let countdownTimer = null
 const profileForm = reactive({
   username: '',
   phone: '',
-  code: ''
+  code: '' // 注意：这里对应后端的 phoneCode（提交时映射）
 })
 
 watchEffect(() => {
@@ -178,7 +190,7 @@ watchEffect(() => {
   profileForm.phone = userData.value.phone || ''
 })
 
-/** ========== 倒计时 ========== */
+/** ========== 倒计时工具 ========== */
 const startCountdown = () => {
   if (countdownTimer) {
     clearInterval(countdownTimer)
@@ -195,6 +207,14 @@ const startCountdown = () => {
   }, 1000)
 }
 
+const stopCountdown = () => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  countdown.value = 0
+}
+
 onBeforeUnmount(() => {
   if (countdownTimer) {
     clearInterval(countdownTimer)
@@ -204,11 +224,10 @@ onBeforeUnmount(() => {
 
 /** ========== 获取验证码：校验 + 调接口 ========== */
 const sendCode = async () => {
-  // 正在倒计时就别点了
   if (countdown.value > 0) return
 
   const phone = String(profileForm.phone || '').trim()
-  const phoneReg = /^1\d{10}$/ // 简单校验：1开头11位
+  const phoneReg = /^1[3-9]\d{9}$/
 
   if (!phone) {
     ElMessage.warning('请先输入手机号')
@@ -219,17 +238,12 @@ const sendCode = async () => {
     return
   }
 
-  const payload = {
-    phone,
-    scene: 'RESET_PASSWORD' // 固定参数
-  }
-
-  // 你要求带 X-Forwarded-For：前端拿不到真实公网IP，这里按你说的从 localStorage 拿
-  const clientIp = localStorage.getItem('clientIp') || ''
-
   try {
-    // 注意：你的 http 响应拦截器 code==200 会 return res.data（此接口 data=null）
-    // 所以这里成功时返回值就是 null，不代表失败，只要不抛异常就是成功
+    // scene 固定
+    const payload = { phone, scene: 'BIND_PHONE' }
+
+    // 你之前玩过 X-Forwarded-For，这里给你保留，但不强依赖
+    const clientIp = localStorage.getItem('clientIp') || ''
     if (clientIp) {
       await http.post('/user/phone/code', payload, {
         headers: { 'X-Forwarded-For': clientIp }
@@ -241,16 +255,121 @@ const sendCode = async () => {
     ElMessage.success('验证码已发送')
     startCountdown()
   } catch (e) {
-    // 失败提示 http 的拦截器已经弹过一次了，这里别重复弹到用户想砸电脑
-    // 你要是想更明确也可以放开这一行：
-    // ElMessage.error('发送失败，请稍后重试')
+    // http 拦截器一般已经提示了，这里不重复轰炸用户
   }
 }
 
-/** ========== 保存资料（你还没接后端，就先保留占位） ========== */
-const handleUpdate = () => {
-  ElMessage.success('更新成功（保存接口还没接）')
-  showProfilePanel.value = false
+const beforeAvatarUpload = (file) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt5M = file.size / 1024 / 1024 <= 5
+
+  if (!isImage) {
+    ElMessage.warning('只能上传图片文件')
+    return false
+  }
+  if (!isLt5M) {
+    ElMessage.warning('图片大小不能超过 5MB')
+    return false
+  }
+  return true
+}
+
+
+const uploadAvatar = async ({ file }) => {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    // 关键点：multipart 不要手动写 boundary，axios 会自动处理
+    const newUrl = await http.put('/user/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    // newUrl 就是后端返回的 data（字符串）
+    ElMessage.success('头像更新成功')
+
+    // 立刻刷新用户信息（最稳，不用你手动拼 store）
+    await authStore.fetchUserInfoFromServer()
+
+  } catch (e) {
+    // 失败提示拦截器一般已经弹了
+  }
+}
+
+/** ========== 保存资料：只提交变更字段（支持单改/双改） ========== */
+const handleUpdate = async () => {
+  // 老数据（来自 userInfo）
+  const oldUsername = String(userData.value?.username || '').trim()
+  const oldPhone = String(userData.value?.phone || '').trim()
+
+  // 新数据（来自表单）
+  const newUsername = String(profileForm.username || '').trim()
+  const newPhone = String(profileForm.phone || '').trim()
+  const phoneCode = String(profileForm.code || '').trim()
+
+  const usernameChanged = newUsername !== oldUsername
+  const phoneChanged = newPhone !== oldPhone
+
+  // 1) 两个都没改：别请求
+  if (!usernameChanged && !phoneChanged) {
+    ElMessage.info('没有修改内容')
+    return
+  }
+
+  // 2) 最小校验
+  if (usernameChanged) {
+    if (!newUsername) {
+      ElMessage.warning('用户名不能为空')
+      return
+    }
+    if (newUsername.length < 1 || newUsername.length > 20) {
+      ElMessage.warning('用户名长度必须在 1-20 之间')
+      return
+    }
+  }
+
+  const phoneReg = /^1[3-9]\d{9}$/
+  if (phoneChanged) {
+    if (!newPhone) {
+      ElMessage.warning('手机号不能为空')
+      return
+    }
+    if (!phoneReg.test(newPhone)) {
+      ElMessage.warning('手机号格式不正确')
+      return
+    }
+    // 只要改了手机号，验证码必填
+    if (!phoneCode) {
+      ElMessage.warning('请输入手机验证码')
+      return
+    }
+  }
+
+  // 3) 只提交变更字段
+  const payload = {}
+  if (usernameChanged) payload.username = newUsername
+  if (phoneChanged) {
+    payload.phone = newPhone
+    payload.phoneCode = phoneCode
+  }
+
+  try {
+    await http.put('/user/profile', payload)
+
+    ElMessage.success('资料更新成功')
+
+    // 刷新用户信息（更新顶部显示 + 刷新本地缓存）
+    await authStore.fetchUserInfoFromServer()
+
+    // 清理验证码输入
+    profileForm.code = ''
+    stopCountdown()
+
+    // 关闭面板
+    showProfilePanel.value = false
+  } catch (e) {
+    // http 拦截器已提示
+  }
 }
 
 /** ========== 退出登录 ========== */
@@ -287,6 +406,7 @@ const rankData = ref([
   { name: '沙丘', hot: '4322' }
 ])
 </script>
+
 
 
 <style scoped>
@@ -473,4 +593,12 @@ const rankData = ref([
   cursor: pointer;
   text-decoration: underline;
 }
+.clickable { cursor: pointer; }
+
+.avatar-uploader { margin-top: 12px; }
+
+.avatar-change-btn {
+  width: 100%;
+}
+
 </style>

@@ -60,7 +60,6 @@ import http from '../request/http'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
-import http from '../request/http'
 
 const router = useRouter()
 const authStore = useAuthStore()
