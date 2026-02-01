@@ -4,7 +4,7 @@ import router from '../router'
 import { useAuthStore } from '../stores/auth'
 
 // 配置常量
-const TOKEN_HEADER_KEY = 'satoken'
+const TOKEN_HEADER_KEY = 'Authorization'
 
 // 创建 axios 实例
 const service = axios.create({
@@ -19,7 +19,7 @@ service.interceptors.request.use(
     const token = authStore.token
     
     if (token) {
-      config.headers[TOKEN_HEADER_KEY] = token
+      config.headers[TOKEN_HEADER_KEY] = `Bearer ${token}`
     }
     
     return config

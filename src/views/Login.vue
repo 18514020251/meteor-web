@@ -1,142 +1,212 @@
 <template>
-  <div class="login-container">
-    <el-card shadow="hover" class="login-card">
-      <template #header>
+  <div class="login-wrapper">
+    <div class="login-container">
+      <div class="stars"></div>
+      
+      <div class="meteor-container">
+        <div v-for="n in 8" :key="n" class="meteor"></div>
+      </div>
+      
+      <el-card shadow="always" class="login-card">
         <div class="card-header">
-          <span>用户登录/注册</span>
-        </div>
-      </template>
-      <div class="card-body">
-        <!-- 登录表单 -->
-        <div v-if="activeTab === 'login'">
-          <el-form :model="loginForm" label-width="80px">
-            <el-form-item label="用户名">
-              <el-input v-model="loginForm.username" placeholder="请输入用户名"></el-input>
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="loginForm.password" type="password" placeholder="请输入密码"></el-input>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" class="login-button" :loading="loading" @click="handleLogin">登录</el-button>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="default" class="register-button" @click="switchToRegister">没有账号？点击注册</el-button>
-            </el-form-item>
-          </el-form>
+          <h2>{{ activeTab === 'login' ? '欢迎回来' : '创建账号' }}</h2>
         </div>
         
-        <!-- 注册表单 -->
-        <div v-else-if="activeTab === 'register'">
-          <el-form :model="registerForm" label-width="80px">
-            <el-form-item label="用户名">
-              <el-input v-model="registerForm.username" placeholder="请输入用户名"></el-input>
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="registerForm.password" type="password" placeholder="请输入密码"></el-input>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" class="register-button" @click="handleRegister">注册</el-button>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="default" class="login-button" @click="switchToLogin">已有账号？点击登录</el-button>
-            </el-form-item>
-          </el-form>
+        <div class="card-body">
+          <transition name="fade" mode="out-in">
+            <div v-if="activeTab === 'login'" key="login">
+              <el-form :model="loginForm" label-position="top">
+                <el-form-item label="用户名">
+                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User"></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password></el-input>
+                </el-form-item>
+                <div class="action-buttons">
+                  <el-button type="primary" class="main-button" :loading="loading" @click="handleLogin">立即登录</el-button>
+                  <el-button link class="switch-button" @click="switchToRegister">没有账号？去注册</el-button>
+                </div>
+              </el-form>
+            </div>
+            
+            <div v-else key="register">
+              <el-form :model="registerForm" label-position="top">
+                <el-form-item label="用户名">
+                  <el-input v-model="registerForm.username" placeholder="设置用户名" :prefix-icon="User"></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input v-model="registerForm.password" type="password" placeholder="设置密码" :prefix-icon="Lock" show-password></el-input>
+                </el-form-item>
+                <div class="action-buttons">
+                  <el-button type="success" class="main-button" :loading="loading" @click="handleRegister">提交注册</el-button>
+                  <el-button link class="switch-button" @click="switchToLogin">已有账号？去登录</el-button>
+                </div>
+              </el-form>
+            </div>
+          </transition>
         </div>
-      </div>
-    </el-card>
+      </el-card>
+    </div>
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, reactive } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import http from '../request/http'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
+import { User, Lock } from '@element-plus/icons-vue'
 
-export default {
-  name: 'LoginView',
-  data() {
-    return {
-      activeTab: 'login',
-      loginForm: {
-        username: '',
-        password: ''
-      },
-      registerForm: {
-        username: '',
-        password: ''
-      },
-      loading: false
-    }
-  },
-  methods: {
-    handleLogin() {
-      this.loading = true
-      
-      // 发送登录请求
-      http.post('/user/login', this.loginForm)
-        .then(token => {
-          const authStore = useAuthStore()
-          authStore.setToken(token)
-          this.$message.success('登录成功')
-          this.$router.push('/')
-        })
-        .catch(error => {
-          console.error('登录失败:', error)
-        })
-        .finally(() => {
-          this.loading = false
-        })
-    },
-    handleRegister() {
-      // 注册功能待实现
-      this.$message.info('注册功能待实现')
-    },
-    switchToRegister() {
-      this.activeTab = 'register'
-    },
-    switchToLogin() {
-      this.activeTab = 'login'
-    }
+const router = useRouter()
+const activeTab = ref('login')
+const loading = ref(false)
+
+const loginForm = reactive({ username: '', password: '' })
+const registerForm = reactive({ username: '', password: '' })
+
+// --- 参数校验函数 ---
+const validateForm = (form) => {
+  if (!form.username || form.username.trim() === '') {
+    ElMessage.warning('用户名不能为空')
+    return false
   }
+  if (!form.password || form.password.length < 6 || form.password.length > 20) {
+    ElMessage.warning('密码长度必须在 6-20 之间')
+    return false
+  }
+  return true
 }
+
+const handleLogin = () => {
+  if (!validateForm(loginForm)) return // 校验不通过则拦截
+
+  loading.value = true
+  http.post('/user/login', loginForm)
+    .then(token => {
+      const authStore = useAuthStore()
+      authStore.setToken(token)
+      ElMessage.success('登录成功')
+      router.push('/loading')
+    })
+    .catch(err => {
+      console.error(err)
+      // 如果后端返回了错误信息，这里会自动弹出（取决于你的 http.js 封装）
+    })
+    .finally(() => loading.value = false)
+}
+
+const handleRegister = () => {
+  if (!validateForm(registerForm)) return // 校验不通过则拦截
+
+  loading.value = true
+  http.post('/user/register', registerForm)
+    .then(() => {
+      ElMessage.success('注册成功')
+      activeTab.value = 'login'
+    })
+    .catch(err => console.error(err))
+    .finally(() => loading.value = false)
+}
+
+const switchToRegister = () => { activeTab.value = 'register' }
+const switchToLogin = () => { activeTab.value = 'login' }
 </script>
 
+<style>
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+</style>
+
 <style scoped>
+.login-wrapper {
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+}
+
 .login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 60vh;
-  padding: 20px;
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex; justify-content: center; align-items: center;
+  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
 }
 
+.stars {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/123163/stars.png') repeat;
+  opacity: 0.5;
+  z-index: 0;
+}
+
+/* --- 增强版流星样式 --- */
+.meteor-container {
+  position: absolute;
+  width: 100%; height: 100%;
+  transform: rotateZ(35deg); /* 稍微调整角度 */
+  z-index: 1;
+}
+
+.meteor {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(-45deg, #5f91ff, rgba(0, 0, 255, 0));
+  filter: drop-shadow(0 0 6px #699bff);
+  opacity: 0;
+  /* 使用 cubic-bezier 让动画更有加速冲刺感 */
+  animation: tail 4000ms cubic-bezier(0.175, 0.885, 0.32, 1) infinite, 
+             shooting 4000ms cubic-bezier(0.175, 0.885, 0.32, 1) infinite;
+}
+
+/* 随机性配置 */
+.meteor:nth-child(1) { top: 10%; left: 10%; animation-duration: 3500ms; animation-delay: 0s; }
+.meteor:nth-child(2) { top: 30%; left: 60%; animation-duration: 4500ms; animation-delay: 1.2s; opacity: 0.7; }
+.meteor:nth-child(3) { top: 50%; left: 20%; animation-duration: 4000ms; animation-delay: 2.5s; }
+.meteor:nth-child(4) { top: 15%; left: 85%; animation-duration: 5000ms; animation-delay: 4s; opacity: 0.4; }
+.meteor:nth-child(5) { top: 75%; left: 45%; animation-duration: 3000ms; animation-delay: 1s; }
+.meteor:nth-child(6) { top: 45%; left: 95%; animation-duration: 4200ms; animation-delay: 5.5s; }
+.meteor:nth-child(7) { top: 5%; left: 40%; animation-duration: 3800ms; animation-delay: 3s; opacity: 0.6; }
+.meteor:nth-child(8) { top: 85%; left: 70%; animation-duration: 4800ms; animation-delay: 2s; }
+
+@keyframes tail {
+  0% { width: 0; }
+  20% { width: 140px; }
+  100% { width: 0; }
+}
+
+@keyframes shooting {
+  0% { transform: translateX(0); opacity: 0; }
+  5% { opacity: 1; }
+  30% { transform: translateX(580px); opacity: 0; } /* 划过的距离变长 */
+  100% { transform: translateX(600px); opacity: 0; }
+}
+
+/* --- 卡片样式保持不变 --- */
 .login-card {
-  width: 400px;
-  max-width: 100%;
+  position: relative; z-index: 10;
+  width: 420px; border: none; border-radius: 15px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  color: #fff;
 }
 
-.card-header {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+.card-header { text-align: center; margin-bottom: 20px; }
+.card-header h2 { margin: 0; font-weight: 300; letter-spacing: 2px; color: #fff; }
 
-.login-tabs {
-  /* 标签栏样式 */
-}
+:deep(.el-input__prefix-inner) { font-size: 18px; color: rgba(255, 255, 255, 0.7) !important; }
+:deep(.el-form-item__label) { color: rgba(255, 255, 255, 0.8) !important; }
+:deep(.el-input__wrapper) { background-color: rgba(255, 255, 255, 0.1) !important; box-shadow: none !important; border: 1px solid rgba(255, 255, 255, 0.2); }
+:deep(.el-input__inner) { color: #fff !important; }
 
-.login-tabs .el-tabs__content {
-  display: none;
-}
+.action-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.main-button { width: 100%; height: 45px; font-size: 16px; border-radius: 8px; }
+.switch-button { color: rgba(255, 255, 255, 0.6); font-size: 13px; }
+.switch-button:hover { color: #409eff; }
 
-.card-body {
-  padding: 20px 0;
-}
-
-.login-button {
-  width: 100%;
-}
-
-.register-button {
-  width: 100%;
-}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

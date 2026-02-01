@@ -1,22 +1,17 @@
 <template>
   <div class="app-container">
-    <el-container>
-      <!-- 只在非登录页面显示头部和底部 -->
-      <el-header v-if="$route.path !== '/login'">
-        <div class="header-content">
-          <h1>Vue 3 + Vite 项目</h1>
-          <el-menu :default-active="activeIndex" class="el-menu-demo" mode="horizontal" @select="handleSelect">
-            <el-menu-item index="/">首页</el-menu-item>
-            <el-menu-item index="/about">关于</el-menu-item>
-          </el-menu>
-        </div>
-      </el-header>
-      <el-main>
+    <template v-if="$route.path === '/login'">
+      <router-view />
+    </template>
+
+    <el-container v-else class="full-layout">
+      <el-main class="main-content">
         <router-view />
       </el-main>
-      <el-footer v-if="$route.path !== '/login'">
+
+      <el-footer>
         <div class="footer-content">
-          <p>© 2026 Vue 3 + Vite 项目</p>
+          <p>© 2026 meteor</p>
         </div>
       </el-footer>
     </el-container>
@@ -27,64 +22,86 @@
 export default {
   name: 'App',
   data() {
-    return {
-      activeIndex: '/'
-    }
+    return { activeIndex: '/' }
   },
   watch: {
     $route: {
-      handler() {
-        this.activeIndex = this.$route.path
-      },
+      handler() { this.activeIndex = this.$route.path },
       immediate: true
     }
   },
   methods: {
-    handleSelect(key) {
-      this.$router.push(key)
-    }
+    handleSelect(key) { this.$router.push(key) }
   }
 }
 </script>
 
 <style>
-* {
+/* 1. 彻底清除基础样式，取消 body 的 flex 居中 */
+html, body {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
+  height: 100%; /* 使用 100% 比 100vh 在移动端更稳 */
+  width: 100%;
+  overflow: hidden; /* 禁止最外层 body 滚动 */
+}
+
+#app {
+  height: 100%;
+  width: 100%;
 }
 
 .app-container {
-  min-height: 100vh;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   height: 100%;
-  padding: 0 20px;
+  width: 100%;
 }
 
-.header-content h1 {
-  color: #fff;
-  font-size: 20px;
+/* 2. 修正 Element 容器高度 */
+.full-layout {
+  height: 100vh; /* 严格等于屏幕高度 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止父壳产生滚动条 */
 }
 
-.el-header {
-  background-color: #409EFF;
-  color: #fff;
-  line-height: 60px;
+/* 3. 关键：去除 el-main 的默认边距和背景色 */
+.main-content::-webkit-scrollbar {
+  width: 0px; /* 宽度设为0，滚动条就彻底消失了，但依然可以滚动 */
+  background: transparent;
+}
+
+.main-content::-webkit-scrollbar {
+  width: 0px; 
+  height: 0px;
+  background: transparent;
+}
+
+/* 2. 针对 Firefox 的隐藏方式 */
+.main-content {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+  
+  padding: 0 !important;
+  background: transparent !important;
+  
+  /* --- 关键修改点 --- */
+  flex: 1;             /* 占据剩余所有空间 */
+  overflow-y: auto;    /* 允许垂直方向滚动 */
+  overflow-x: hidden;  /* 彻底禁止水平方向滚动 */
+  /* ----------------- */
 }
 
 .el-footer {
-  background-color: #f5f7fa;
-  color: #909399;
-  line-height: 60px;
-  text-align: center;
+  height: 40px !important; /* 给固定高度 */
+  line-height: 40px;
+  padding: 0;
+  flex-shrink: 0; /* 禁止被压缩 */
+  background: #090A0F; /* 配合你的星空背景色 */
+  border-top: 1px solid rgba(255,255,255,0.1);
 }
 
-.footer-content {
-  padding: 0 20px;
+.footer-content p {
+  margin: 0;
+  font-size: 12px;
 }
 </style>
