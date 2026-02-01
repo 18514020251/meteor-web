@@ -7,23 +7,22 @@
       </div>
 
       <header class="glass-nav">
-        <div class="nav-content">
+        <div v-if="userData" class="nav-content">
           <div class="brand">METEOR <span class="sub">CINEMA</span></div>
-          
-            <div class="user-portal" v-if="userData">
-              <div class="user-text">
-                <span class="name">{{ userData.username }}</span>
-                <span class="role">UID: {{ userData.userId || '000' }}</span>
-              </div>
-              <el-avatar :size="42" :src="userData.avatar" class="avatar-glow" />
 
-              <el-button 
-                link 
-                class="exit-btn" 
-                :icon="SwitchButton" 
-                @click="handleLogout"
-              ></el-button>
+          <div class="user-portal">
+            <div class="user-text">
+              <span class="name">{{ userData.username }}</span>
+              <span class="role">UID: {{ userData.userId || '000' }}</span>
             </div>
+            <el-avatar 
+              :size="42" 
+              :src="userData.avatar" 
+              class="avatar-glow clickable" 
+              @click="showProfilePanel = true"
+            />
+            <el-button link class="exit-btn" :icon="SwitchButton" @click="handleLogout"></el-button>
+          </div>
         </div>
       </header>
 
@@ -66,16 +65,9 @@
                   <span class="rank-hot">{{ item.hot }}℃</span>
                 </div>
               </div>
-
               <div class="quick-status">
-                <div class="status-card">
-                  <p>我的抢票</p>
-                  <h3>02</h3>
-                </div>
-                <div class="status-card">
-                  <p>待付款</p>
-                  <h3 class="warn">01</h3>
-                </div>
+                <div class="status-card"><p>我的抢票</p><h3>02</h3></div>
+                <div class="status-card"><p>待付款</p><h3 class="warn">01</h3></div>
               </div>
             </div>
           </el-col>
@@ -83,299 +75,237 @@
       </main>
     </div>
 
+    <transition name="slide-right">
+      <div v-if="showProfilePanel" class="profile-panel-overlay" @click.self="showProfilePanel = false">
+        <div class="profile-glass-panel">
+          <div class="panel-header">
+            <h3>个人中心</h3>
+            <el-icon class="close-icon" @click="showProfilePanel = false"><Close /></el-icon>
+          </div>
+
+          <div class="profile-content">
+            <div class="avatar-edit-section">
+              <el-avatar :size="80" :src="userData.avatar" class="avatar-glow" />
+              <p class="uid-tag">ID: {{ userData.userId }}</p>
+            </div>
+
+            <el-form label-position="top" class="custom-form">
+              <el-form-item label="用户名">
+                <el-input v-model="profileForm.username" placeholder="请输入新用户名" />
+              </el-form-item>
+              <el-form-item label="手机号">
+                <el-input v-model="profileForm.phone" placeholder="绑定手机号" />
+              </el-form-item>
+              <el-form-item label="验证码">
+                <div class="code-input-group">
+                  <el-input v-model="profileForm.code" placeholder="输入验证码" />
+                  <el-button type="primary" plain :disabled="countdown > 0" @click="sendCode">
+                    {{ countdown > 0 ? countdown + 's' : '获取' }}
+                  </el-button>
+                </div>
+              </el-form-item>
+              <el-button type="primary" class="save-btn" @click="handleUpdate">保存资料</el-button>
+            </el-form>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <transition name="fade">
       <div v-if="showLogoutConfirm" class="logout-overlay">
-       <div class="logout-glass-card">
-       <div class="logout-icon">
-            <el-icon><Warning /></el-icon>
-         </div>
-          <h3>确认退出系统？</h3>
-          <p>退出后将断开与 METEOR 的实时同步</p>
-      
-         <div class="logout-actions">
-           <button class="btn-cancel" @click="showLogoutConfirm = false">取消</button>
-            <button class="btn-confirm" @click="confirmLogout">确认退出</button>
+        <div class="logout-glass-card">
+          <div class="logout-icon"><el-icon><Warning /></el-icon></div>
+          <h3>确认退出？</h3>
+          <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 20px;">退出后需重新登录</p>
+          <div class="logout-actions">
+            <button class="btn-cancel" @click="showLogoutConfirm = false">取消</button>
+            <button class="btn-confirm" @click="confirmLogout">确认</button>
           </div>
-       </div>
+        </div>
       </div>
     </transition>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { VideoCamera, DataLine, SwitchButton } from '@element-plus/icons-vue'
+import { ref, reactive } from 'vue'
+import { VideoCamera, DataLine, SwitchButton, Warning, Close } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const router = useRouter()
-
-// --- 这里是核心改动：不再写死，而是指向 store 里的数据 ---
 const userData = authStore.userInfo
+
 const showLogoutConfirm = ref(false)
-// 退出登录
-// 点击退出按钮触发
-const handleLogout = () => {
-  showLogoutConfirm.value = true
+const showProfilePanel = ref(false)
+const countdown = ref(0)
+
+const profileForm = reactive({
+  username: userData?.username || '',
+  phone: '13888888888',
+  code: ''
+})
+
+const sendCode = () => {
+  ElMessage.success('验证码已发送')
+  countdown.value = 60
+  const timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) clearInterval(timer)
+  }, 1000)
 }
 
-// 确认退出的逻辑
-const confirmLogout = () => {
-  authStore.logout()
-  router.push('/login')
+const handleUpdate = () => {
+  ElMessage.success('更新成功')
+  showProfilePanel.value = false
 }
 
-const hotMovies = ref([
-  { id: 1, title: '流浪地球 3', type: '科幻/冒险', score: '9.3', isFlash: true, poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&auto=format' },
-  { id: 2, title: '奥本海默', type: '剧情/传记', score: '8.8', isFlash: false, poster: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=300&auto=format' },
-  { id: 3, title: '星际穿越', type: '科幻', score: '9.6', isFlash: true, poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300&auto=format' },
-  { id: 4, title: '复仇者联盟', type: '英雄', score: '9.0', isFlash: true, poster: 'https://images.unsplash.com/photo-1509281373149-e957c6296406?w=300&auto=format' },
-  { id: 5, title: '沙丘', type: '战争', score: '9.1', isFlash: false, poster: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format' },
-  { id: 6, title: '蝙蝠侠', type: '动作', score: '8.7', isFlash: true, poster: 'https://images.unsplash.com/photo-1531259683007-016a7b628fc3?w=300&auto=format' },
-])
+const handleLogout = () => { showLogoutConfirm.value = true }
+const confirmLogout = () => { 
+  authStore.logout(); 
+  router.push('/login');
+  showLogoutConfirm.value = false;
+}
 
-const rankData = ref([
-  { name: '流浪地球 3', hot: '9982' },
-  { name: '星际穿越', hot: '8721' },
-  { name: '复仇者联盟', hot: '7655' },
-  { name: '奥本海默', hot: '5421' },
-  { name: '沙丘', hot: '4322' }
-])
 const handleGrab = (movie) => {
-  console.log('开始抢购：', movie.title)
+  ElMessage.info(`正在尝试${movie.isFlash ? '抢购' : '预约'}: ${movie.title}`)
 }
 
-
+// 电影数据
+const hotMovies = ref([
+  { id: 1, title: '流浪地球 3', type: '科幻/冒险', score: '9.3', isFlash: true, poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300' },
+  { id: 2, title: '奥本海默', type: '剧情/传记', score: '8.8', isFlash: false, poster: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=300' },
+  { id: 3, title: '星际穿越', type: '科幻', score: '9.6', isFlash: true, poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300' },
+  { id: 4, title: '复仇者联盟', type: '英雄', score: '9.0', isFlash: true, poster: 'https://images.unsplash.com/photo-1509281373149-e957c6296406?w=300' },
+  { id: 5, title: '沙丘', type: '战争', score: '9.1', isFlash: false, poster: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300' },
+  { id: 6, title: '蝙蝠侠', type: '动作', score: '8.7', isFlash: true, poster: 'https://images.unsplash.com/photo-1531259683007-016a7b628fc3?w=300' },
+])
+const rankData = ref([{ name: '流浪地球 3', hot: '9982' }, { name: '星际穿越', hot: '8721' }, { name: '复仇者联盟', hot: '7655' }, { name: '奥本海默', hot: '5421' }, { name: '沙丘', hot: '4322' }])
 </script>
 
 <style scoped>
-/* 复用登录页背景 */
-.user-wrapper {
-  width: 100vw; height: 100vh; overflow: hidden;
-}
+/* ================== 1. 布局与背景 ================== */
+.user-wrapper { width: 100vw; height: 100vh; overflow: hidden; position: relative; }
+.login-container { width: 100%; height: 100%; background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%); overflow-y: auto; }
+.stars { position: fixed; inset: 0; background: url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/123163/stars.png'); opacity: 0.4; pointer-events: none; }
 
-.login-container {
-  position: relative; width: 100%; height: 100%;
-  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
-  overflow-y: auto; /* 允许滚动 */
-}
-
-/* 顶部导航毛玻璃 */
-.glass-nav {
-  position: sticky; top: 0; z-index: 100;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(15px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex; align-items: center;
-}
-
-.nav-content {
-  width: 1300px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px;
-}
-
+/* 导航栏 */
+.glass-nav { position: sticky; top: 0; z-index: 100; height: 70px; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; }
+.nav-content { width: 1300px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
 .brand { color: #fff; font-size: 22px; font-weight: bold; letter-spacing: 2px; }
-.sub { font-size: 12px; color: #409eff; vertical-align: middle; }
-
+.sub { font-size: 12px; color: #409eff; }
 .user-portal { display: flex; align-items: center; gap: 15px; }
-.user-text { display: flex; flex-direction: column; text-align: right; }
-.name { color: #fff; font-size: 14px; }
-.role { color: rgba(255,255,255,0.5); font-size: 11px; }
+.user-text { display: flex; flex-direction: column; text-align: right; color: #fff; }
+.name { font-size: 14px; }
+.role { font-size: 11px; color: rgba(255,255,255,0.5); }
+.avatar-glow { border: 2px solid #409eff; box-shadow: 0 0 10px rgba(64, 158, 255, 0.5); cursor: pointer; transition: 0.3s; }
+.avatar-glow:hover { transform: scale(1.05); }
+.exit-btn { color: #fff; font-size: 20px; }
+.exit-btn:hover { color: #f56c6c; }
 
-.avatar-glow { border: 2px solid #409eff; box-shadow: 0 0 10px rgba(64, 158, 255, 0.5); }
-
-/* 主体内容 */
+/* ================== 2. 电影卡片 ================== */
 .content-body { max-width: 1300px; margin: 30px auto; padding: 0 20px; }
+.movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
 
-.glass-section {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 20px;
-  margin-bottom: 25px;
-}
-
-.section-title {
-  color: #fff; font-size: 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
-}
-
-/* 电影网格布局 */
-.movie-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 20px;
-}
-
-/* 1. 基础卡片容器微调 */
 .glass-card {
-  position: relative; /* 必须为 relative，供流光定位 */
+  position: relative;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   overflow: hidden;
-  /* 移除原有的普通 border，改用透明边框占位 */
-  border: 1px solid rgba(255, 255, 255, 0.1); 
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
-  z-index: 1;
+  z-index: 1; /* 提升层级以处理流光 */
 }
 
-/* 2. 创建流光伪元素 */
 .glass-card::before {
   content: "";
   position: absolute;
-  top: -50%; left: -50%;
-  width: 200%; height: 200%;
-  /* 只有在 hover 时才显示流光 */
-  background: conic-gradient(
-    transparent, 
-    rgba(64, 158, 255, 0.8), 
-    #409eff, 
-    transparent 30%
-  );
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: conic-gradient(transparent, #409eff, transparent 30%);
   animation: rotate-stream 4s linear infinite;
-  opacity: 0;
-  transition: opacity 0.3s;
-  z-index: -1; /* 放在内容后面 */
+  opacity: 0; transition: opacity 0.3s;
+  z-index: 0;
 }
+.glass-card:hover::before { opacity: 1; }
+.glass-card:hover { transform: translateY(-8px); box-shadow: 0 0 20px rgba(64, 158, 255, 0.4); }
 
-/* 3. 使用 mask 遮罩，只让边框部分显示流光 */
-/* 这是实现“流光边框”最干净的方法 */
-.glass-card::after {
-  content: "";
-  position: absolute;
-  inset: 2px; /* 这里的数值决定了边框的粗细 */
-  background: #1a1f2b; /* 这里的颜色要和卡片背景色一致 */
-  border-radius: 10px;
-  z-index: -1;
-}
-
-/* 4. Hover 触发效果 */
-.glass-card:hover {
-  transform: translateY(-8px);
-  border-color: transparent; /* 隐藏原边框 */
-  box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
-}
-
-.glass-card:hover::before {
-  opacity: 1;
-}
-
-/* 5. 定义旋转动画 */
-@keyframes rotate-stream {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* 6. 强化海报框，确保内容不被伪元素遮挡 */
-.poster-box {
-  position: relative;
-  z-index: 2;
-}
-.info-box {
-  position: relative;
-  z-index: 2;
-}
-
-.poster-box { position: relative; height: 240px; }
+.poster-box, .info-box { position: relative; z-index: 2; }
+.poster-box { height: 240px; overflow: hidden; position: relative; }
 .poster-box img { width: 100%; height: 100%; object-fit: cover; }
+
 .badge {
   position: absolute; top: 10px; right: 10px;
-  background: #f56c6c; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  background: #f56c6c; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 4px;
+  z-index: 10; box-shadow: 0 2px 10px rgba(245, 108, 108, 0.4);
 }
-
-.info-box { padding: 12px; }
-.info-box h4 { margin: 0; color: #fff; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.info-box p { color: rgba(255,255,255,0.5); font-size: 12px; margin: 5px 0 15px 0; }
-
+.info-box { padding: 12px; background: #161b22; }
+.info-box h4 { margin: 0; color: #fff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info-box p { color: rgba(255,255,255,0.5); font-size: 11px; margin: 5px 0 12px; }
 .footer-action { display: flex; justify-content: space-between; align-items: center; }
-.score { color: #ff9900; font-weight: bold; font-size: 14px; }
+.score { color: #ff9900; font-weight: bold; font-size: 13px; }
 
-/* 侧边栏排行 */
-.rank-item {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 18px; color: #fff;
+/* ================== 3. 退出弹窗 (补全样式) ================== */
+.logout-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px); display: flex; align-items: center;
+  justify-content: center; z-index: 3000; /* 绝对最高层 */
 }
-.rank-num {
-  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.1); border-radius: 4px; font-size: 12px;
+.logout-glass-card {
+  background: rgba(30, 35, 45, 0.9); border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 40px; border-radius: 24px; text-align: center; width: 340px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
 }
+.logout-icon { font-size: 50px; color: #f56c6c; margin-bottom: 15px; }
+.logout-glass-card h3 { color: #fff; margin: 0 0 10px 0; }
+.logout-actions { display: flex; gap: 15px; margin-top: 25px; }
+.btn-cancel, .btn-confirm {
+  flex: 1; padding: 12px; border-radius: 10px; border: none; cursor: pointer; transition: 0.3s; font-weight: bold;
+}
+.btn-cancel { background: rgba(255,255,255,0.08); color: #fff; }
+.btn-cancel:hover { background: rgba(255,255,255,0.15); }
+.btn-confirm { background: #f56c6c; color: #fff; }
+.btn-confirm:hover { background: #ff4d4d; transform: scale(1.05); }
+
+/* ================== 4. 个人面板与侧边栏 ================== */
+.profile-panel-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px); z-index: 2000; display: flex; justify-content: flex-end;
+}
+.profile-glass-panel {
+  width: 360px; height: 100%; background: rgba(15, 20, 30, 0.95);
+  border-left: 1px solid rgba(64, 158, 255, 0.3); padding: 40px 25px;
+}
+.panel-header { display: flex; justify-content: space-between; color: #fff; margin-bottom: 30px; }
+.close-icon { cursor: pointer; font-size: 20px; }
+.code-input-group { display: flex; gap: 8px; }
+.save-btn { width: 100%; margin-top: 20px; }
+
+.glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 25px; }
+.section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
+.rank-item { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; color: #fff; font-size: 13px; }
+.rank-num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 4px; }
 .top-1 { background: #f56c6c; }
 .top-2 { background: #e6a23c; }
 .top-3 { background: #409eff; }
-.rank-name { flex: 1; font-size: 14px; }
-.rank-hot { color: #f56c6c; font-size: 12px; }
-
-.quick-status { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px; }
-.status-card {
-  background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center;
-}
-.status-card p { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 5px; }
-.status-card h3 { color: #fff; margin: 0; }
+.quick-status { display: flex; gap: 15px; margin-top: 20px; }
+.status-card { flex: 1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; text-align: center; }
+.status-card p { font-size: 11px; color: #aaa; margin: 0; }
+.status-card h3 { color: #fff; margin: 5px 0 0; }
 .status-card h3.warn { color: #f56c6c; }
 
-/* 复用登录页流星背景样式 */
-.stars { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/123163/stars.png') repeat; z-index: 0; opacity: 0.5; }
-.meteor-container { position: fixed; width: 100%; height: 100%; transform: rotateZ(45deg); z-index: 1; pointer-events: none; }
-.meteor { position: absolute; height: 2px; background: linear-gradient(-45deg, #5f91ff, rgba(0, 0, 255, 0)); animation: shooting 3000ms ease-in-out infinite; opacity: 0; }
-@keyframes shooting { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translateX(400px); opacity: 0; } }
-/* 弹窗遮罩层 */
-.logout-overlay {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px); /* 背景模糊 */
-  z-index: 999;
-  display: flex; justify-content: center; align-items: center;
-}
+/* 动画定义 */
+@keyframes rotate-stream { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes shooting { 0% { transform: translate(0,0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(400px, 400px); opacity: 0; } }
 
-/* 弹窗主体卡片 */
-.logout-glass-card {
-  width: 360px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(64, 158, 255, 0.3); /* 蓝色半透明边框 */
-  border-radius: 20px;
-  padding: 30px;
-  text-align: center;
-  box-shadow: 0 0 30px rgba(64, 158, 255, 0.2); /* 蓝色外发光 */
-  animation: scaleUp 0.3s ease-out;
-}
+.meteor { position: absolute; top: -50px; width: 2px; height: 50px; background: linear-gradient(to bottom, #409eff, transparent); animation: shooting 3s infinite linear; opacity: 0; }
+.meteor:nth-child(1) { left: 10%; animation-delay: 0s; }
+.meteor:nth-child(2) { left: 30%; animation-delay: 1s; }
+.meteor:nth-child(3) { left: 50%; animation-delay: 2s; }
 
-.logout-icon {
-  font-size: 40px;
-  color: #f56c6c;
-  margin-bottom: 15px;
-  filter: drop-shadow(0 0 10px rgba(245, 108, 108, 0.5));
-}
-
-.logout-glass-card h3 { color: #fff; margin: 0 0 10px 0; font-weight: 400; letter-spacing: 2px; }
-.logout-glass-card p { color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-bottom: 30px; }
-
-/* 按钮组 */
-.logout-actions { display: flex; gap: 15px; }
-
-.logout-actions button {
-  flex: 1; height: 40px; border-radius: 10px; border: none;
-  cursor: pointer; transition: all 0.3s; font-size: 14px;
-}
-
-.btn-cancel {
-  background: rgba(255, 255, 255, 0.1); color: #fff;
-}
-.btn-cancel:hover { background: rgba(255, 255, 255, 0.2); }
-
-.btn-confirm {
-  background: linear-gradient(45deg, #409eff, #3a8ee6);
-  color: #fff;
-  box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
-}
-.btn-confirm:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6); }
-
-/* 动画 */
-@keyframes scaleUp {
-  from { opacity: 0; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1); }
-}
-
+.slide-right-enter-active, .slide-right-leave-active { transition: all 0.4s ease; }
+.slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
