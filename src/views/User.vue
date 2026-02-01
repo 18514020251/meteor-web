@@ -14,7 +14,14 @@
             <div class="user-text">
               <span class="name">{{ userData.username }}</span>
               <span class="role">UID: {{ userData.userId || '000' }}</span>
+                <span class="phone" v-if="hasPhone">
+                  📱 {{ maskedPhone }}
+                </span>
+                <span class="phone phone-missing" v-else @click="showProfilePanel = true">
+                  未绑定手机号（点我去绑）
+                </span>
             </div>
+            
             <el-avatar 
               :size="42" 
               :src="userData.avatar" 
@@ -128,24 +135,46 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, watchEffect} from 'vue'
 import { VideoCamera, DataLine, SwitchButton, Warning, Close } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { storeToRefs } from 'pinia'
+const router = useRouter()
+
 
 const authStore = useAuthStore()
-const router = useRouter()
-const userData = authStore.userInfo
+const { userInfo: userData } = storeToRefs(authStore)
+
+const hasPhone = computed(() => {
+  const p = userData.value?.phone
+  return !!(p && String(p).trim())
+})
+
+const maskedPhone = computed(() => {
+  const p = String(userData.value?.phone || '')
+  if (!p) return ''
+  return p.length >= 7
+    ? `${p.slice(0, 3)}****${p.slice(-4)}`
+    : p
+})
+
 
 const showLogoutConfirm = ref(false)
 const showProfilePanel = ref(false)
 const countdown = ref(0)
 
 const profileForm = reactive({
-  username: userData?.username || '',
-  phone: '13888888888',
+  username: '',
+  phone: '',
   code: ''
+})
+
+watchEffect(() => {
+  if (!userData.value) return
+  profileForm.username = userData.value.username || ''
+  profileForm.phone = userData.value.phone || ''
 })
 
 const sendCode = () => {
@@ -325,7 +354,7 @@ const rankData = ref([{ name: '流浪地球 3', hot: '9982' }, { name: '星际�
   /* 这里的旋转角度需要和下面动画的位移角度一致，35度通常视觉效果最好 */
   transform: rotate(-35deg); 
   background: linear-gradient(to right, rgba(64, 158, 255, 0.8), transparent);
-  animation: diagonal-fly 3s infinite linear;
+  animation: diagonal-fly 2s infinite linear;
   opacity: 0;
   filter: drop-shadow(0 0 5px #409eff);
 }
@@ -356,5 +385,17 @@ const rankData = ref([{ name: '流浪地球 3', hot: '9982' }, { name: '星际�
     transform: translate(-120vw, 120vh) rotate(-35deg);
     opacity: 0;
   }
+}
+
+.phone {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  margin-top: 4px;
+}
+
+.phone-missing {
+  color: #e6a23c;
+  cursor: pointer;
+  text-decoration: underline;
 }
 </style>

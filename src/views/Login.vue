@@ -16,10 +16,10 @@
             <div v-if="activeTab === 'login'" key="login">
               <el-form :model="loginForm" label-position="top">
                 <el-form-item label="用户名">
-                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User"></el-input>
+                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User" @keyup.enter="handleLogin"></el-input>
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password></el-input>
+                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin"></el-input>
                 </el-form-item>
                 <div class="action-buttons">
                   <el-button type="primary" class="main-button" :loading="loading" @click="handleLogin">立即登录</el-button>
