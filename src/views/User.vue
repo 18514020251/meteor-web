@@ -308,4 +308,53 @@ const rankData = ref([{ name: '流浪地球 3', hot: '9982' }, { name: '星际�
 .slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+/* ================== 完美的斜向流星 ================== */
+.meteor-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.meteor {
+  position: absolute;
+  /* 调整为长条状，宽度代表流星长度 */
+  width: 150px; 
+  height: 2px; 
+  /* 这里的旋转角度需要和下面动画的位移角度一致，35度通常视觉效果最好 */
+  transform: rotate(-35deg); 
+  background: linear-gradient(to right, rgba(64, 158, 255, 0.8), transparent);
+  animation: diagonal-fly 3s infinite linear;
+  opacity: 0;
+  filter: drop-shadow(0 0 5px #409eff);
+}
+
+/* 随机分布流星的起始位置（主要在顶部和右侧） */
+.meteor:nth-child(1) { top: -10%; right: 10%; animation-delay: 0s; }
+.meteor:nth-child(2) { top: 10%; right: -5%; animation-delay: 1s; }
+.meteor:nth-child(3) { top: 30%; right: 20%; animation-delay: 2.5s; }
+.meteor:nth-child(4) { top: -5%; right: 40%; animation-delay: 1.5s; }
+.meteor:nth-child(5) { top: 20%; right: 50%; animation-delay: 0.5s; }
+.meteor:nth-child(6) { top: 40%; right: -10%; animation-delay: 2s; }
+
+/* 斜向飞行核心动画 */
+@keyframes diagonal-fly {
+  0% {
+    /* 初始状态：在屏幕外，右上角 */
+    transform: translate(200px, -200px) rotate(-35deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0.5;
+  }
+  100% {
+    /* 结束状态：向左下方大幅度位移 */
+    transform: translate(-120vw, 120vh) rotate(-35deg);
+    opacity: 0;
+  }
+}
 </style>
