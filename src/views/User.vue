@@ -44,18 +44,20 @@
               
               <div class="movie-grid">
                 <div v-for="movie in hotMovies" :key="movie.id" class="glass-card">
-                  <div class="poster-box">
-                    <img :src="movie.poster" />
-                    <div class="badge" v-if="movie.isFlash">抢票中</div>
-                  </div>
-                  <div class="info-box">
-                    <h4>{{ movie.title }}</h4>
-                    <p>{{ movie.type }}</p>
-                    <div class="footer-action">
-                      <span class="score">{{ movie.score }}分</span>
-                      <el-button type="primary" size="small" round @click="handleGrab(movie)">
-                        {{ movie.isFlash ? '立即抢' : '预约' }}
-                      </el-button>
+                  <div class="card-inner">
+                    <div class="poster-box">
+                      <img :src="movie.poster" />
+                      <div class="badge" v-if="movie.isFlash">抢票中</div>
+                    </div>
+                    <div class="info-box">
+                      <h4>{{ movie.title }}</h4>
+                      <p>{{ movie.type }}</p>
+                      <div class="footer-action">
+                        <span class="score">{{ movie.score }}分</span>
+                        <el-button type="primary" size="small" round @click="handleGrab(movie)">
+                          {{ movie.isFlash ? '立即抢' : '预约' }}
+                        </el-button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -93,17 +95,20 @@
 
           <div class="profile-content">
             <div class="avatar-edit-section">
-              <el-avatar :size="80" :src="userData.avatar" class="avatar-glow" />
+              <el-image 
+                class="avatar-glow preview-avatar"
+                :src="userData.avatar" 
+                :preview-src-list="[userData.avatar]"
+                :preview-teleported="true"  :hide-on-click-modal="true" fit="cover"
+              />
               <p class="uid-tag">ID: {{ userData.userId }}</p>
-                        
+
               <el-upload
                 :show-file-list="false"
                 :before-upload="beforeAvatarUpload"
                 :http-request="uploadAvatar"
               >
-                <el-button size="small" type="primary" plain>
-                  修改头像
-                </el-button>
+                <el-button size="small" type="primary" plain>修改头像</el-button>
               </el-upload>
             </div>
 
@@ -435,27 +440,41 @@ const rankData = ref([
 
 .glass-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden; /* 裁剪超出边框的流光 */
+  padding: 2px;    /* 这里的 padding 就是流光边框的粗细 */
+  background: rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
-  z-index: 1; /* 提升层级以处理流光 */
+  display: flex;
 }
 
 .glass-card::before {
   content: "";
   position: absolute;
-  top: -50%; left: -50%; width: 200%; height: 200%;
-  background: conic-gradient(transparent, #409eff, transparent 30%);
-  animation: rotate-stream 4s linear infinite;
-  opacity: 0; transition: opacity 0.3s;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  /* 锥形渐变，你可以修改颜色 #409eff 为你喜欢的颜色 */
+  background: conic-gradient(
+    transparent, 
+    #409eff, 
+    transparent 30%
+  );
+  animation: rotate-stream 3s linear infinite;
+  opacity: 0;
+  transition: opacity 0.4s;
   z-index: 0;
 }
 .glass-card:hover::before { opacity: 1; }
-.glass-card:hover { transform: translateY(-8px); box-shadow: 0 0 20px rgba(64, 158, 255, 0.4); }
-
-.poster-box, .info-box { position: relative; z-index: 2; }
+.glass-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+}
+.poster-box, .info-box {
+  position: relative;
+  z-index: 2;
+}
 .poster-box { height: 240px; overflow: hidden; position: relative; }
 .poster-box img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -520,7 +539,10 @@ const rankData = ref([
 .status-card h3.warn { color: #f56c6c; }
 
 /* 动画定义 */
-@keyframes rotate-stream { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes rotate-stream {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 @keyframes shooting { 0% { transform: translate(0,0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(400px, 400px); opacity: 0; } }
 
 .meteor { position: absolute; top: -50px; width: 2px; height: 50px; background: linear-gradient(to bottom, #409eff, transparent); animation: shooting 3s infinite linear; opacity: 0; }
@@ -600,5 +622,39 @@ const rankData = ref([
 .avatar-change-btn {
   width: 100%;
 }
+.card-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #161b22; /* 必须和背景色一致，或使用深色 */
+  border-radius: 10px; /* 比外层稍微小一点点 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* 让预览用的图片保持圆形并有光效 */
+.preview-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%; 
+  border: 2px solid #409eff;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
+  cursor: zoom-in;
+  transition: 0.3s;
+  overflow: hidden; /* 确保图片缩放时不会超出圆角范围 */
+}
+.preview-avatar :deep(img) {
+  border-radius: 50%;
+}
 
+.preview-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(64, 158, 255, 0.8);
+}
+
+/* 覆盖 Element Plus 预览层的背景（可选，为了统一你的暗黑风格） */
+:deep(.el-image-viewer__mask) {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(10px);
+}
 </style>
