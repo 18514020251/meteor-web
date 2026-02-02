@@ -21,6 +21,16 @@
                   未绑定手机号（点我去绑）
                 </span>
             </div>
+
+            <el-badge
+              :value="unreadCount"
+              :max="99"
+              :hidden="unreadCount <= 0"
+              class="nav-badge-item"
+            >
+              <el-button link class="nav-icon-btn" :icon="Message" @click="handleMailClick"></el-button>
+            </el-badge>
+            <el-button link class="nav-icon-btn" :icon="Setting" @click="handleSettingClick"></el-button>
             
             <el-avatar
               :size="42"
@@ -83,6 +93,107 @@
           </el-col>
         </el-row>
       </main>
+      <el-drawer
+  v-model="showInbox"
+  direction="ltr"
+  size="500px"
+  :with-header="false"
+  class="inbox-drawer"
+>
+
+  <div class="inbox-panel">
+<div class="inbox-header">
+  <div class="inbox-title">
+    <el-icon><Message /></el-icon>
+    <span>我的消息</span>
+    <span class="inbox-sub" v-if="inboxTotal">共 {{ inboxTotal }} 条</span>
+  </div>
+
+  <div class="inbox-actions">
+    <!-- 发光胶囊筛选 -->
+    <div class="seg-wrap">
+      <el-segmented
+        v-model="inboxQuery.readStatus"
+        :options="readStatusOptions"
+        size="small"
+      />
+    </div>
+
+    <!-- 刷新按钮 -->
+    <el-button
+      link
+      class="icon-glass-btn"
+      @click="fetchInbox"
+      :disabled="inboxLoading"
+      title="刷新"
+    >
+      <el-icon class="spin-when-loading" :class="{ spinning: inboxLoading }">
+        <Refresh />
+      </el-icon>
+    </el-button>
+
+    <!-- 关闭按钮 -->
+    <el-button link class="icon-glass-btn close" @click="showInbox = false" title="关闭">
+      <el-icon><Close /></el-icon>
+    </el-button>
+  </div>
+</div>
+
+<div class="inbox-body" v-loading="inboxLoading">
+  <div v-if="!inboxLoading && inboxList.length === 0" class="empty">
+    暂无消息
+  </div>
+
+  <transition-group name="msg-fly" tag="div" class="msg-list">
+    <div
+      v-for="(msg, index) in inboxList"
+      :key="msg.id" 
+      class="msg-card"
+      :class="{
+        unread: msg.readStatus === 0,
+        active: activeMsgId === msg.id
+      }"
+      :style="{ '--i': index }"
+      @click.stop="selectMessage(msg)"
+    >
+      <div class="msg-top">
+        <span class="msg-title">{{ msg.title }}</span>
+
+        <div class="msg-top-right">
+          <span class="msg-time">{{ formatTime(msg.createTime) }}</span>
+
+          <transition name="pop-actions">
+            <div
+              v-if="activeMsgId === msg.id"
+              class="msg-actions-top"
+              @click.stop
+            >
+              <button class="action-btn read" @click="onMarkRead(msg)">已读</button>
+              <button class="action-btn del" @click="onDelete(msg)">删除</button>
+            </div>
+          </transition>
+        </div>
+      </div>
+
+      <div class="msg-content">{{ msg.content }}</div>
+    </div>
+  </transition-group>
+</div>
+
+    <div class="inbox-footer">
+      <el-pagination
+        layout="prev, pager, next"
+        :total="inboxTotal"
+        :page-size="inboxQuery.pageSize"
+        :current-page="inboxQuery.pageNum"
+        @current-change="handleInboxPageChange"
+        small
+        background
+      />
+    </div>
+  </div>
+</el-drawer>
+
     </div>
 
     <transition name="slide-right">
@@ -156,13 +267,155 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watchEffect, onBeforeUnmount } from 'vue'
-import { VideoCamera, DataLine, SwitchButton, Warning, Close } from '@element-plus/icons-vue'
+import { ref, reactive, computed, watchEffect, onBeforeUnmount, onMounted, watch } from 'vue'
+
+import { VideoCamera, DataLine, SwitchButton, Warning, Close, Message, Setting, Refresh } from '@element-plus/icons-vue'
+
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import http from '../request/http'
+
+const showInbox = ref(false)
+const inboxLoading = ref(false)
+const inboxList = ref([])
+const inboxTotal = ref(0)
+
+const inboxQuery = reactive({
+  readStatus: null, // null=全部；0=未读；1=已读（按你后端枚举）
+  pageNum: 1,
+  pageSize: 12
+})
+
+const readStatusOptions = [
+  { label: '全部', value: null },
+  { label: '未读', value: 0 },
+  { label: '已读', value: 1 }
+]
+
+const activeMsgId = ref(null)
+
+const selectMessage = (msg) => {
+  activeMsgId.value = (activeMsgId.value === msg.id) ? null : msg.id
+}
+
+const onMarkRead = async (msg) => {
+  if (msg.readStatus === 1) {
+    ElMessage.info('该消息已是已读状态')
+    return
+  }
+
+  try {
+    await http.post(`/message/${msg.id}/read`)
+
+    // 1. 本地状态更新（不用重新 fetch）
+    msg.readStatus = 1
+    msg.readTime = new Date().toISOString()
+
+    // 2. 未读数同步减少
+    if (unreadCount.value > 0) {
+      unreadCount.value--
+    }
+
+    // 3. 关闭操作按钮
+    activeMsgId.value = null
+
+    ElMessage.success('已标记为已读')
+  } catch (e) {
+    // 拦截器一般已经处理
+  }
+}
+
+
+const onDelete = async (msg) => {
+  try {
+    await http.delete(`/message/${msg.id}`)
+
+    // 1) 如果删的是未读，未读数 -1
+    if (msg.readStatus === 0 && unreadCount.value > 0) {
+      unreadCount.value--
+    }
+
+    // 2) 从当前列表里移除（不必重新 fetch）
+    const idx = inboxList.value.findIndex((x) => x.id === msg.id)
+    if (idx !== -1) inboxList.value.splice(idx, 1)
+
+    // 3) 总数 -1（避免分页显示怪）
+    if (inboxTotal.value > 0) inboxTotal.value--
+
+    // 4) 关闭操作按钮
+    activeMsgId.value = null
+
+    ElMessage.success('已删除')
+
+    // 5) 如果这一页删空了，自动回退一页再拉一次（可选但很舒服）
+    if (inboxList.value.length === 0 && inboxQuery.pageNum > 1) {
+      inboxQuery.pageNum--
+      await fetchInbox()
+    }
+  } catch (e) {
+    // 失败拦截器一般会提示，这里不重复轰炸
+  }
+}
+
+
+
+const fetchInbox = async () => {
+  inboxLoading.value = true
+  try {
+    const params = {
+      pageNum: inboxQuery.pageNum,
+      pageSize: inboxQuery.pageSize
+    }
+    if (inboxQuery.readStatus !== null && inboxQuery.readStatus !== undefined) {
+      params.readStatus = inboxQuery.readStatus
+    }
+
+    const res = await http.get('/message', { params })
+
+    // 同样兼容两种封装：res 是完整结构 or 已拆壳
+    const data = res?.data?.records ? res.data : res
+
+    inboxList.value = data.records || []
+    inboxTotal.value = Number(data.total || 0)
+  } catch (e) {
+    inboxList.value = []
+    inboxTotal.value = 0
+  } finally {
+    inboxLoading.value = false
+  }
+}
+
+watch(
+  () => inboxQuery.readStatus,
+  async () => {
+    if (!showInbox.value) return
+    inboxQuery.pageNum = 1
+    await fetchInbox()
+  }
+)
+
+const formatTime = (iso) => {
+  if (!iso) return ''
+  // 2026-02-01T11:07:52 -> 2026-02-01 11:07
+  return String(iso).replace('T', ' ').slice(0, 16)
+}
+
+
+
+const handleMailClick = async () => {
+  showInbox.value = true
+  inboxQuery.pageNum = 1
+  await fetchInbox()
+}
+
+const handleInboxPageChange = async (p) => {
+  inboxQuery.pageNum = p
+  await fetchInbox()
+}
+
+
 
 /** ========== 基础 ========== */
 const router = useRouter()
@@ -186,6 +439,33 @@ const showLogoutConfirm = ref(false)
 const showProfilePanel = ref(false)
 const countdown = ref(0)
 let countdownTimer = null
+
+const unreadCount = ref(0)
+
+const fetchUnreadCount = async () => {
+  try {
+    // 你的 http 封装如果 baseURL 已配，就用相对路径
+    const res = await http.get('/message/unread/count')
+
+    // 适配两种常见封装：
+    // 1) http 返回的是后端完整结构：{ code, msg, data }
+    // 2) http 直接返回 data（拦截器拆过壳）：0
+    if (typeof res === 'number') {
+      unreadCount.value = res
+    } else {
+      unreadCount.value = Number(res?.data ?? 0)
+    }
+  } catch (e) {
+    // 不要弹窗轰炸用户，静默失败即可
+    unreadCount.value = 0
+  }
+}
+
+onMounted(() => {
+  fetchUnreadCount()
+})
+
+
 
 /** ========== 表单 ========== */
 const profileForm = reactive({
@@ -425,29 +705,64 @@ const rankData = ref([
 .login-container { width: 100%; height: 100%; background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%); overflow-y: auto; }
 .stars { position: fixed; inset: 0; background: url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/123163/stars.png'); opacity: 0.4; pointer-events: none; }
 
-/* 导航栏 */
-.glass-nav { position: sticky; top: 0; z-index: 100; height: 70px; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; }
+/* ================== 2. 导航栏 ================== */
+.glass-nav {
+  position: sticky; top: 0; z-index: 100;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(15px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex; align-items: center;
+}
 .nav-content { width: 1300px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
 .brand { color: #fff; font-size: 22px; font-weight: bold; letter-spacing: 2px; }
 .sub { font-size: 12px; color: #409eff; }
-.user-portal { display: flex; align-items: center; gap: 15px; }
+
+.user-portal { display: flex; align-items: center; gap: 20px; }
 .user-text { display: flex; flex-direction: column; text-align: right; color: #fff; }
 .name { font-size: 14px; }
 .role { font-size: 11px; color: rgba(255,255,255,0.5); }
-.avatar-glow { border: 2px solid #409eff; box-shadow: 0 0 10px rgba(64, 158, 255, 0.5); cursor: pointer; transition: 0.3s; }
+
+.nav-icon-btn {
+  color: rgba(255, 255, 255, 0.8) !important;
+  font-size: 20px !important;
+  transition: all 0.3s ease;
+  padding: 8px !important;
+}
+.nav-icon-btn:hover {
+  color: #409eff !important;
+  transform: scale(1.1);
+  text-shadow: 0 0 10px rgba(64, 158, 255, 0.5);
+}
+
+.nav-badge-item { display: flex; align-items: center; }
+:deep(.el-badge__content.is-fixed) {
+  top: 8px;
+  right: 12px;
+  background-color: #f56c6c;
+  border: none;
+  box-shadow: 0 0 8px rgba(245, 108, 108, 0.6);
+}
+
+.avatar-glow {
+  border: 2px solid #409eff;
+  box-shadow: 0 0 10px rgba(64, 158, 255, 0.5);
+  cursor: pointer;
+  transition: 0.3s;
+}
 .avatar-glow:hover { transform: scale(1.05); }
 .exit-btn { color: #fff; font-size: 20px; }
 .exit-btn:hover { color: #f56c6c; }
 
-/* ================== 2. 电影卡片 ================== */
+/* ================== 3. 主体布局 / 电影卡片 ================== */
 .content-body { max-width: 1300px; margin: 30px auto; padding: 0 20px; }
 .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
 
 .glass-card {
   position: relative;
   border-radius: 12px;
-  overflow: hidden; /* 裁剪超出边框的流光 */
-  padding: 2px;    /* 这里的 padding 就是流光边框的粗细 */
+  overflow: hidden;
+  padding: 2px;
   background: rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
   display: flex;
@@ -460,12 +775,7 @@ const rankData = ref([
   left: -50%;
   width: 200%;
   height: 200%;
-  /* 锥形渐变，你可以修改颜色 #409eff 为你喜欢的颜色 */
-  background: conic-gradient(
-    transparent, 
-    #409eff, 
-    transparent 30%
-  );
+  background: conic-gradient(transparent, #409eff, transparent 30%);
   animation: rotate-stream 3s linear infinite;
   opacity: 0;
   transition: opacity 0.4s;
@@ -476,16 +786,26 @@ const rankData = ref([
   transform: translateY(-8px);
   box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
 }
-.poster-box, .info-box {
+
+.card-inner {
   position: relative;
-  z-index: 2;
+  z-index: 1;
+  width: 100%;
+  background: #161b22;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+
+.poster-box, .info-box { position: relative; z-index: 2; }
 .poster-box { height: 240px; overflow: hidden; position: relative; }
 .poster-box img { width: 100%; height: 100%; object-fit: cover; }
 
 .badge {
   position: absolute; top: 10px; right: 10px;
-  background: #f56c6c; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 4px;
+  background: #f56c6c; color: #fff;
+  font-size: 10px; padding: 3px 8px; border-radius: 4px;
   z-index: 10; box-shadow: 0 2px 10px rgba(245, 108, 108, 0.4);
 }
 .info-box { padding: 12px; background: #161b22; }
@@ -494,43 +814,82 @@ const rankData = ref([
 .footer-action { display: flex; justify-content: space-between; align-items: center; }
 .score { color: #ff9900; font-weight: bold; font-size: 13px; }
 
-/* ================== 3. 退出弹窗 (补全样式) ================== */
+/* ================== 4. 退出弹窗 ================== */
 .logout-overlay {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(10px); display: flex; align-items: center;
-  justify-content: center; z-index: 3000; /* 绝对最高层 */
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3000;
 }
 .logout-glass-card {
-  background: rgba(30, 35, 45, 0.9); border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 40px; border-radius: 24px; text-align: center; width: 340px;
+  background: rgba(30, 35, 45, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 40px;
+  border-radius: 24px;
+  text-align: center;
+  width: 340px;
   box-shadow: 0 25px 50px rgba(0,0,0,0.5);
 }
 .logout-icon { font-size: 50px; color: #f56c6c; margin-bottom: 15px; }
 .logout-glass-card h3 { color: #fff; margin: 0 0 10px 0; }
+
 .logout-actions { display: flex; gap: 15px; margin-top: 25px; }
 .btn-cancel, .btn-confirm {
-  flex: 1; padding: 12px; border-radius: 10px; border: none; cursor: pointer; transition: 0.3s; font-weight: bold;
+  flex: 1; padding: 12px;
+  border-radius: 10px; border: none;
+  cursor: pointer; transition: 0.3s;
+  font-weight: bold;
 }
 .btn-cancel { background: rgba(255,255,255,0.08); color: #fff; }
 .btn-cancel:hover { background: rgba(255,255,255,0.15); }
 .btn-confirm { background: #f56c6c; color: #fff; }
 .btn-confirm:hover { background: #ff4d4d; transform: scale(1.05); }
 
-/* ================== 4. 个人面板与侧边栏 ================== */
+/* ================== 5. 个人面板 ================== */
 .profile-panel-overlay {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px); z-index: 2000; display: flex; justify-content: flex-end;
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex; justify-content: flex-end;
 }
 .profile-glass-panel {
-  width: 360px; height: 100%; background: rgba(15, 20, 30, 0.95);
-  border-left: 1px solid rgba(64, 158, 255, 0.3); padding: 40px 25px;
+  width: 360px; height: 100%;
+  background: rgba(15, 20, 30, 0.95);
+  border-left: 1px solid rgba(64, 158, 255, 0.3);
+  padding: 40px 25px;
 }
 .panel-header { display: flex; justify-content: space-between; color: #fff; margin-bottom: 30px; }
 .close-icon { cursor: pointer; font-size: 20px; }
-.code-input-group {
-  display: flex;
-  gap: 12px;
+
+.custom-form { margin-top: 30px; padding: 0 5px; }
+
+:deep(.el-form-item__label) {
+  color: #70c0ff !important;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  font-size: 13px;
+  margin-bottom: 8px !important;
+  text-transform: uppercase;
 }
+:deep(.el-form-item) { margin-bottom: 22px !important; }
+
+:deep(.el-input__wrapper) {
+  background-color: rgba(10, 25, 47, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important;
+  border-radius: 8px;
+  padding: 5px 12px;
+  transition: all 0.3s ease;
+}
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
+  background-color: rgba(10, 25, 47, 0.8) !important;
+}
+:deep(.el-input__inner) { color: #ffffff !important; font-family: 'Inter', sans-serif; }
+:deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.3); }
+
+.code-input-group { display: flex; gap: 12px; }
 .code-input-group .el-button {
   background: rgba(64, 158, 255, 0.1);
   border: 1px solid rgba(64, 158, 255, 0.4);
@@ -543,28 +902,58 @@ const rankData = ref([
   color: #fff;
   box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
 }
+
 .save-btn {
   width: 100%;
   height: 45px;
   margin-top: 30px;
-  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); /* 经典深海蓝渐变 */
+  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
   border: none;
   font-weight: bold;
   letter-spacing: 4px;
   box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
   transition: 0.4s;
 }
-
 .save-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6);
   filter: brightness(1.2);
 }
-:deep(.el-form-item) {
-  margin-bottom: 25px;
+
+/* 预览头像 */
+.preview-avatar {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  border: 2px solid #409eff;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
+  cursor: zoom-in;
+  transition: 0.3s;
+  overflow: hidden;
+}
+.preview-avatar :deep(img) { border-radius: 50%; }
+.preview-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(64, 158, 255, 0.8);
+}
+:deep(.el-image-viewer__mask) {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(10px);
 }
 
-.glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 25px; }
+/* 手机号展示 */
+.phone { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+.phone-missing { color: #e6a23c; cursor: pointer; text-decoration: underline; }
+.clickable { cursor: pointer; }
+
+/* ================== 6. 侧边栏通用 ================== */
+.glass-section {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  margin-bottom: 25px;
+}
 .section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
 .rank-item { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; color: #fff; font-size: 13px; }
 .rank-num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 4px; }
@@ -577,23 +966,354 @@ const rankData = ref([
 .status-card h3 { color: #fff; margin: 5px 0 0; }
 .status-card h3.warn { color: #f56c6c; }
 
-/* 动画定义 */
-@keyframes rotate-stream {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* ================== 7. Drawer：消息面板 ================== */
+:deep(.el-drawer__body) { padding: 0 !important; background: transparent !important; }
+:deep(.el-drawer) {
+  transition-duration: 0.6s !important; /* 默认很快，拉长 */
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
-@keyframes shooting { 0% { transform: translate(0,0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(400px, 400px); opacity: 0; } }
+:deep(.el-overlay) {
+  transition-duration: 2s !important;
+}
 
-.meteor { position: absolute; top: -50px; width: 2px; height: 50px; background: linear-gradient(to bottom, #409eff, transparent); animation: shooting 3s infinite linear; opacity: 0; }
-.meteor:nth-child(1) { left: 10%; animation-delay: 0s; }
-.meteor:nth-child(2) { left: 30%; animation-delay: 1s; }
-.meteor:nth-child(3) { left: 50%; animation-delay: 2s; }
+.inbox-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(18, 24, 34, 0.96), rgba(10, 13, 18, 0.94));
+  border-right: 1px solid rgba(64, 158, 255, 0.22);
+  box-shadow: 20px 0 60px rgba(0, 0, 0, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+.inbox-panel::before {
+  content: "";
+  position: absolute;
+  top: -120px; left: -120px;
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, rgba(64,158,255,0.18), transparent 65%);
+  filter: blur(2px);
+  pointer-events: none;
+}
 
+.inbox-header {
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+  background: rgba(10, 13, 18, 0.55);
+}
+
+.inbox-title {
+  display: flex; gap: 10px;
+  align-items: center;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.inbox-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+}
+
+.inbox-actions { display: flex; align-items: center; gap: 10px; }
+
+/* segmented 外壳 */
+.seg-wrap {
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(64,158,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  overflow: hidden; /* 裁掉内部方块 */
+}
+
+/* segmented 本体 + 强行圆角核弹 */
+.seg-wrap :deep(.el-segmented) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+.seg-wrap :deep(.el-segmented__item) {
+  color: rgba(255,255,255,0.70) !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  transition: 0.25s;
+}
+.seg-wrap :deep(.el-segmented__item.is-selected) {
+  background: transparent !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+}
+/* 选中滑块层：不同版本类名都打 */
+.seg-wrap :deep(.el-segmented__item-selected),
+.seg-wrap :deep(.el-segmented__indicator),
+.seg-wrap :deep(.el-segmented__selected) {
+  border-radius: 999px !important;
+  background: rgba(64, 158, 255, 0.22) !important;
+  box-shadow:
+    0 0 0 1px rgba(64,158,255,0.35) inset,
+    0 0 14px rgba(64,158,255,0.28) !important;
+}
+
+.icon-glass-btn {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+.icon-glass-btn:hover {
+  transform: translateY(-1px) scale(1.06);
+  background: rgba(64,158,255,0.10);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35), 0 0 14px rgba(64,158,255,0.22);
+}
+.icon-glass-btn.close:hover {
+  background: rgba(245,108,108,0.10);
+  border-color: rgba(245,108,108,0.25);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35), 0 0 14px rgba(245,108,108,0.18);
+}
+
+/* 刷新 loading 旋转 */
+.spin-when-loading { transition: 0.2s; }
+.spinning { animation: spin 0.9s linear infinite; }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+/* 内容区 */
+.inbox-body { flex: 1; padding: 14px; overflow: auto; }
+.inbox-body::-webkit-scrollbar { width: 10px; }
+.inbox-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border: 2px solid rgba(0,0,0,0);
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.inbox-body::-webkit-scrollbar-thumb:hover { background: rgba(64,158,255,0.18); }
+
+.empty {
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  padding: 50px 0;
+  border: 1px dashed rgba(255,255,255,0.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+}
+
+/* 消息列表 */
+.msg-list { display: flex; flex-direction: column; gap: 12px; }
+
+.msg-card {
+  padding: 12px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+.msg-card::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle, rgba(64,158,255,0.10), transparent 60%);
+  opacity: 0;
+  transform: translate(20%, -10%);
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+.msg-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 14px 26px rgba(0,0,0,0.35);
+}
+.msg-card:hover::after { opacity: 1; }
+
+.msg-card.unread {
+  border-color: rgba(64,158,255,0.28);
+  box-shadow: 0 0 0 1px rgba(64,158,255,0.10) inset;
+}
+.msg-card.unread::before {
+  content: "";
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: rgba(64,158,255,0.9);
+  box-shadow: 0 0 12px rgba(64,158,255,0.8);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.35); opacity: 1; }
+}
+
+/* 选中态 */
+.msg-card.active {
+  border-color: rgba(64,158,255,0.35);
+  box-shadow: 0 0 0 1px rgba(64,158,255,0.12) inset, 0 16px 30px rgba(0,0,0,0.35);
+}
+
+.msg-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.msg-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.msg-time {
+  color: rgba(255,255,255,0.48);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.msg-content {
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* 右上角操作区 */
+.msg-top-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.msg-actions-top { display: flex; gap: 10px; }
+
+/* 操作按钮（已读/删除） */
+.action-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 1px;
+  transition: all 0.22s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
+}
+.action-btn:hover {
+  transform: translateY(-1px) scale(1.06);
+  background: rgba(255,255,255,0.16);
+  border-color: rgba(255,255,255,0.30);
+}
+.action-btn.read {
+  background: rgba(64,158,255,0.22);
+  border-color: rgba(64,158,255,0.42);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.28), 0 0 14px rgba(64,158,255,0.25);
+}
+.action-btn.read:hover {
+  background: rgba(64,158,255,0.30);
+  box-shadow: 0 12px 22px rgba(0,0,0,0.32), 0 0 18px rgba(64,158,255,0.40);
+}
+.action-btn.del {
+  background: rgba(245,108,108,0.20);
+  border-color: rgba(245,108,108,0.40);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.28), 0 0 14px rgba(245,108,108,0.18);
+}
+.action-btn.del:hover {
+  background: rgba(245,108,108,0.28);
+  box-shadow: 0 12px 22px rgba(0,0,0,0.32), 0 0 18px rgba(245,108,108,0.32);
+}
+
+/* “飞出”动画 */
+.pop-actions-enter-active { animation: popIn 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+.pop-actions-leave-active { animation: popOut 0.16s ease-in forwards; }
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes popOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(6px) scale(0.95); }
+}
+
+/* 进入动画：stagger */
+.msg-card.enter {
+  opacity: 0;
+  transform: translateX(10px) translateY(6px);
+  animation: enterCard 1.0s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+  
+}
+@keyframes enterCard { to { opacity: 1; transform: translateX(0) translateY(0); } }
+
+/* footer 分页 */
+.inbox-footer {
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(10, 13, 18, 0.55);
+  backdrop-filter: blur(10px);
+}
+:deep(.el-pagination.is-background .el-pager li) {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  color: rgba(255,255,255,0.75) !important;
+  border-radius: 10px !important;
+}
+:deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: rgba(64,158,255,0.18) !important;
+  border-color: rgba(64,158,255,0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 0 12px rgba(64,158,255,0.22);
+}
+:deep(.el-pagination.is-background .btn-prev),
+:deep(.el-pagination.is-background .btn-next) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 10px !important;
+  transition: all 0.25s ease;
+}
+:deep(.el-pagination.is-background .btn-prev:hover),
+:deep(.el-pagination.is-background .btn-next:hover) {
+  background: rgba(64, 158, 255, 0.18) !important;
+  border-color: rgba(64, 158, 255, 0.35) !important;
+  color: #fff !important;
+  box-shadow: 0 0 12px rgba(64, 158, 255, 0.35);
+  transform: translateY(-1px) scale(1.05);
+}
+:deep(.el-pagination.is-background .btn-prev:disabled),
+:deep(.el-pagination.is-background .btn-next:disabled) {
+  background: rgba(255, 255, 255, 0.03) !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ================== 8. 动画 & 流星背景 ================== */
 .slide-right-enter-active, .slide-right-leave-active { transition: all 0.4s ease; }
 .slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-/* ================== 完美的斜向流星 ================== */
+
+@keyframes rotate-stream { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 斜向流星容器 */
 .meteor-container {
   position: fixed;
   inset: 0;
@@ -602,20 +1322,17 @@ const rankData = ref([
   z-index: 0;
 }
 
+/* 斜向流星 */
 .meteor {
   position: absolute;
-  /* 调整为长条状，宽度代表流星长度 */
-  width: 150px; 
-  height: 2px; 
-  /* 这里的旋转角度需要和下面动画的位移角度一致，35度通常视觉效果最好 */
-  transform: rotate(-35deg); 
+  width: 150px;
+  height: 2px;
+  transform: rotate(-35deg);
   background: linear-gradient(to right, rgba(64, 158, 255, 0.8), transparent);
   animation: diagonal-fly 2s infinite linear;
   opacity: 0;
   filter: drop-shadow(0 0 5px #409eff);
 }
-
-/* 随机分布流星的起始位置（主要在顶部和右侧） */
 .meteor:nth-child(1) { top: -10%; right: 10%; animation-delay: 0s; }
 .meteor:nth-child(2) { top: 10%; right: -5%; animation-delay: 1s; }
 .meteor:nth-child(3) { top: 30%; right: 20%; animation-delay: 2.5s; }
@@ -623,145 +1340,72 @@ const rankData = ref([
 .meteor:nth-child(5) { top: 20%; right: 50%; animation-delay: 0.5s; }
 .meteor:nth-child(6) { top: 40%; right: -10%; animation-delay: 2s; }
 
-/* 斜向飞行核心动画 */
 @keyframes diagonal-fly {
-  0% {
-    /* 初始状态：在屏幕外，右上角 */
-    transform: translate(200px, -200px) rotate(-35deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 0.5;
-  }
-  100% {
-    /* 结束状态：向左下方大幅度位移 */
-    transform: translate(-120vw, 120vh) rotate(-35deg);
-    opacity: 0;
-  }
+  0% { transform: translate(200px, -200px) rotate(-35deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.5; }
+  100% { transform: translate(-120vw, 120vh) rotate(-35deg); opacity: 0; }
 }
 
-.phone {
-  font-size: 11px;
-  color: rgba(255,255,255,0.7);
-  margin-top: 4px;
+/* 入场动画 */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); filter: blur(5px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.fade-in-item {
+  opacity: 0;
+  animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: calc(var(--delay) * 0.3s);
 }
 
-.phone-missing {
-  color: #e6a23c;
-  cursor: pointer;
-  text-decoration: underline;
-}
-.clickable { cursor: pointer; }
+/* --- 飞走动画核心 --- */
 
-.avatar-uploader { margin-top: 12px; }
-
-.avatar-change-btn {
-  width: 100%;
+/* 1. 离开过程中的动画 */
+.msg-fly-leave-active {
+  position: absolute;    /* 必须：让元素脱离文档流，下方的元素才能平滑滚上来 */
+  width: 100%;           /* 保持宽度，防止飞走时突然缩窄 */
+  z-index: 100;
+  pointer-events: none;  /* 飞走时不可点击 */
+  transition: all 0.6s cubic-bezier(0.55, 0, 0.1, 1);
 }
-.card-inner {
+
+/* 2. 飞往的目的地：右上方 + 旋转 + 缩小 + 透明 */
+.msg-fly-leave-to {
+  opacity: 0;
+  transform: translateX(150px) translateY(-80px) rotate(20deg) scale(0.7);
+}
+
+/* 3. 排序过渡：当某一项消失，其他项“滑”上去的动画 */
+.msg-fly-move {
+  transition: transform 0.5s cubic-bezier(0.55, 0, 0.1, 1);
+}
+
+/* --- 优化 msg-card 基础样式 --- */
+.msg-card {
   position: relative;
-  z-index: 1;
-  width: 100%;
-  background: #161b22; /* 必须和背景色一致，或使用深色 */
-  border-radius: 10px; /* 比外层稍微小一点点 */
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-/* 让预览用的图片保持圆形并有光效 */
-.preview-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%; 
-  border: 2px solid #409eff;
-  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
-  cursor: zoom-in;
-  transition: 0.3s;
-  overflow: hidden; /* 确保图片缩放时不会超出圆角范围 */
-}
-.preview-avatar :deep(img) {
-  border-radius: 50%;
-}
-
-.preview-avatar:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 25px rgba(64, 158, 255, 0.8);
-}
-
-/* 覆盖 Element Plus 预览层的背景（可选，为了统一你的暗黑风格） */
-:deep(.el-image-viewer__mask) {
-  background: rgba(0, 0, 0, 0.8) !important;
-  backdrop-filter: blur(10px);
-}
-
-.custom-form {
-  margin-top: 30px;
-  padding: 0 5px;
-}
-
-/* 标签文字优化：改为深青蓝色，带一点科技感 */
-:deep(.el-form-item__label) {
-  color: #70c0ff !important; /* 淡青蓝 */
-  font-weight: 500;
-  letter-spacing: 1.5px;
-  font-size: 13px;
-  margin-bottom: 8px !important;
-  text-transform: uppercase; /* 大写字母更像 UI 界面 */
-}
-
-/* --- 文本框重塑 --- */
-:deep(.el-input__wrapper) {
-  background-color: rgba(10, 25, 47, 0.6) !important; /* 深海蓝透明底 */
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important; /* 微弱边框 */
-  border-radius: 8px;
-  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 12px; /* 建议使用 margin 而不是 gap，动画更稳 */
   transition: all 0.3s ease;
 }
 
-/* 文本框聚焦时的呼吸光效 */
-:deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
-  background-color: rgba(10, 25, 47, 0.8) !important;
+.msg-card:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* 输入框文字颜色 */
-:deep(.el-input__inner) {
-  color: #ffffff !important;
-  font-family: 'Inter', sans-serif;
+.msg-card.active {
+  border-color: #409eff;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.2);
 }
 
-/* 占位符颜色 */
-:deep(.el-input__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.3);
+/* 原有的进入动画（可选） */
+.msg-fly-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
 }
-
-/* 定义入场动画 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px); /* 从下方20像素处开始 */
-    filter: blur(5px); /* 增加一点模糊感，更有科技味 */
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-/* 应用于每一项 */
-.fade-in-item {
-  opacity: 0; /* 初始隐藏 */
-  animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
-  /* 使用我们在 HTML 中定义的 --delay 变量 */
-  animation-delay: calc(var(--delay) * 0.3s); 
-}
-
-/* 强制覆盖 Element Plus 默认的 margin，确保间距美观 */
-:deep(.el-form-item) {
-  margin-bottom: 22px !important;
+.msg-fly-enter-active {
+  transition: all 0.4s ease;
 }
 </style>

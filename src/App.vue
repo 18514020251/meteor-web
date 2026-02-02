@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <template v-if="$route.path === '/login'">
+    <template v-if="route.path === '/login'">
       <router-view />
     </template>
 
@@ -22,13 +22,15 @@
 import { onMounted, watch, ref } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useRoute, useRouter } from 'vue-router'
+// ⚠️ 你下面用到 ElMessage，但没 import，自己补上
+import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const activeIndex = ref('/')
 
-// 核心逻辑：刷新页面时触发
+// 刷新页面时触发
 onMounted(() => {
   if (authStore.token) {
     authStore.initUserInfo()
@@ -40,37 +42,33 @@ watch(() => route.path, (newPath) => {
 }, { immediate: true })
 
 onMounted(() => {
-  // 1. 禁用右键菜单
   window.oncontextmenu = (e) => {
-    e.preventDefault();
+    e.preventDefault()
     ElMessage({
       message: '>>> CRITICAL: CONTEXT_MENU_LOCKED. TERMINAL ACCESS ONLY.',
       type: 'warning',
       duration: 1500,
       offset: 20
-    });
-  };
+    })
+  }
 
-  // 2. 禁用 F12 和常用开发者工具快捷键
   window.onkeydown = (e) => {
     if (
-      e.keyCode === 123 || // F12
-      (e.ctrlKey && e.shiftKey && e.keyCode === 73) || // Ctrl+Shift+I
-      (e.ctrlKey && e.shiftKey && e.keyCode === 74) || // Ctrl+Shift+J
-      (e.ctrlKey && e.keyCode === 85) // Ctrl+U (查看源代码)
+      e.keyCode === 123 ||
+      (e.ctrlKey && e.shiftKey && e.keyCode === 73) ||
+      (e.ctrlKey && e.shiftKey && e.keyCode === 74) ||
+      (e.ctrlKey && e.keyCode === 85)
     ) {
-      return false;
+      return false
     }
-  };
-
+  }
 
   if (authStore.token) {
     authStore.initUserInfo()
   }
-  
 })
-
 </script>
+
 
 
 <style>
