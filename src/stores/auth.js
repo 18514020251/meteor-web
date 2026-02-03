@@ -3,11 +3,26 @@ import http from '../request/http'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    userInfo: null,
-    token: localStorage.getItem('token') || null
+    token: localStorage.getItem('token') || '',
+    userId: Number(localStorage.getItem('userId') || 0),
+    role: localStorage.getItem('role') || '',
+    needOnboarding: localStorage.getItem('needOnboarding') === 'true',
+
+    userInfo: null
   }),
-  actions: {
-    // 1. 设置 token
+ actions: {
+    // ✅ 新增：保存登录返回对象
+    setLoginInfo(loginData) {
+      this.token = loginData.token
+      this.userId = loginData.userId
+      this.role = loginData.role
+      this.needOnboarding = !!loginData.needOnboarding
+
+      localStorage.setItem('token', this.token)
+      localStorage.setItem('userId', String(this.userId))
+      localStorage.setItem('role', this.role)
+      localStorage.setItem('needOnboarding', String(this.needOnboarding))
+    },
     setToken(token) {
       this.token = token
       localStorage.setItem('token', token)
@@ -61,11 +76,18 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // 5. 退出登录
-    logout() {
+logout() {
+      this.token = ''
+      this.userId = 0
+      this.role = ''
+      this.needOnboarding = false
       this.userInfo = null
-      this.token = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user_cache')
+      localStorage.clear()
+    },
+
+    finishOnboarding() {
+      this.needOnboarding = false
+      localStorage.setItem('needOnboarding', 'false')
     }
   }
 })

@@ -96,7 +96,7 @@
       <el-drawer
   v-model="showInbox"
   direction="ltr"
-  size="500px"
+  size="700px"
   :with-header="false"
   class="inbox-drawer"
 >
@@ -109,34 +109,56 @@
     <span class="inbox-sub" v-if="inboxTotal">共 {{ inboxTotal }} 条</span>
   </div>
 
-  <div class="inbox-actions">
-    <!-- 发光胶囊筛选 -->
-    <div class="seg-wrap">
-      <el-segmented
-        v-model="inboxQuery.readStatus"
-        :options="readStatusOptions"
-        size="small"
-      />
-    </div>
-
-    <!-- 刷新按钮 -->
-    <el-button
-      link
-      class="icon-glass-btn"
-      @click="fetchInbox"
-      :disabled="inboxLoading"
-      title="刷新"
-    >
-      <el-icon class="spin-when-loading" :class="{ spinning: inboxLoading }">
-        <Refresh />
-      </el-icon>
-    </el-button>
-
-    <!-- 关闭按钮 -->
-    <el-button link class="icon-glass-btn close" @click="showInbox = false" title="关闭">
-      <el-icon><Close /></el-icon>
-    </el-button>
+<div class="inbox-actions">
+  <!-- 发光胶囊筛选 -->
+  <div class="seg-wrap">
+    <el-segmented
+      v-model="inboxQuery.readStatus"
+      :options="readStatusOptions"
+      size="small"
+    />
   </div>
+
+  <!-- 批量操作：一键已读 / 一键删除 -->
+  <div class="bulk-actions">
+    <button
+      class="bulk-btn bulk-read"
+      :disabled="inboxLoading || inboxTotal === 0"
+      @click.stop="onMarkAllRead"
+      title="一键标记当前列表为已读（接口后续实现）"
+    >
+      一键已读
+    </button>
+
+    <button
+      class="bulk-btn bulk-del"
+      :disabled="inboxLoading || inboxTotal === 0"
+      @click.stop="onDeleteAll"
+      title="一键删除当前列表（接口后续实现）"
+    >
+      一键删除
+    </button>
+  </div>
+
+  <!-- 刷新按钮 -->
+  <el-button
+    link
+    class="icon-glass-btn"
+    @click="fetchInbox"
+    :disabled="inboxLoading"
+    title="刷新"
+  >
+    <el-icon class="spin-when-loading" :class="{ spinning: inboxLoading }">
+      <Refresh />
+    </el-icon>
+  </el-button>
+
+  <!-- 关闭按钮 -->
+  <el-button link class="icon-glass-btn close" @click="showInbox = false" title="关闭">
+    <el-icon><Close /></el-icon>
+  </el-button>
+</div>
+
 </div>
 
 <div class="inbox-body" v-loading="inboxLoading">
@@ -695,6 +717,67 @@ const rankData = ref([
   { name: '奥本海默', hot: '5421' },
   { name: '沙丘', hot: '4322' }
 ])
+
+const onMarkAllRead = async () => {
+  // 接口后续实现：比如 POST /message/read/all 或 POST /message/read/batch
+  // 现在先做前端“假动作”，让 UI 先完整
+  try {
+    // 1) 本地把当前页未读全部标已读
+    let changed = 0
+    inboxList.value.forEach((m) => {
+      if (m.readStatus === 0) {
+        m.readStatus = 1
+        m.readTime = new Date().toISOString()
+        changed++
+      }
+    })
+
+    // 2) 未读数同步减少（只减少当前页改掉的数量，后端做完再全量刷新最稳）
+    if (changed > 0) {
+      unreadCount.value = Math.max(0, unreadCount.value - changed)
+      ElMessage.success(`已读 ${changed} 条`)
+    } else {
+      ElMessage.info('当前页没有未读消息')
+    }
+
+    activeMsgId.value = null
+  } catch (e) {}
+}
+
+const onDeleteAll = async () => {
+  // 接口后续实现：比如 DELETE /message 或 DELETE /message/batch
+  // 现在先做前端“假动作”
+  try {
+    const deletingCount = inboxList.value.length
+    if (deletingCount === 0) {
+      ElMessage.info('当前页没有消息')
+      return
+    }
+
+    // 如果当前页里有未读，未读数也扣掉
+    const unreadDeleting = inboxList.value.filter((m) => m.readStatus === 0).length
+    if (unreadDeleting > 0) {
+      unreadCount.value = Math.max(0, unreadCount.value - unreadDeleting)
+    }
+
+    // 清空当前页
+    inboxList.value = []
+    inboxTotal.value = Math.max(0, inboxTotal.value - deletingCount)
+    activeMsgId.value = null
+
+    ElMessage.success(`已删除当前页 ${deletingCount} 条`)
+
+    // 当前页删空后，如果还有上一页，就回退再拉一次（保持体验）
+    if (inboxQuery.pageNum > 1) {
+      inboxQuery.pageNum--
+      await fetchInbox()
+    } else {
+      // 你也可以选择直接 fetchInbox() 让后端数据兜底
+      // await fetchInbox()
+    }
+  } catch (e) {}
+}
+
 </script>
 
 
@@ -968,6 +1051,9 @@ const rankData = ref([
 
 /* ================== 7. Drawer：消息面板 ================== */
 :deep(.el-drawer__body) { padding: 0 !important; background: transparent !important; }
+:deep(.el-drawer__body) {
+  overflow-x: hidden !important; /* 禁止左右滚动条 */
+}
 :deep(.el-drawer) {
   transition-duration: 0.6s !important; /* 默认很快，拉长 */
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
@@ -1093,7 +1179,9 @@ const rankData = ref([
 @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
 /* 内容区 */
-.inbox-body { flex: 1; padding: 14px; overflow: auto; }
+.inbox-body { flex: 1; padding: 14px; overflow: auto; 
+  overflow-x: hidden;  /* 禁止横向滚动条 */
+  overflow-y: auto; }
 .inbox-body::-webkit-scrollbar { width: 10px; }
 .inbox-body::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.10);
@@ -1408,4 +1496,64 @@ const rankData = ref([
 .msg-fly-enter-active {
   transition: all 0.4s ease;
 }
+
+/* 批量操作按钮容器 */
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 批量按钮 */
+.bulk-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, border-color 0.22s ease, opacity 0.22s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
+}
+
+.bulk-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.28);
+}
+
+.bulk-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 一键已读 */
+.bulk-btn.bulk-read {
+  background: rgba(64,158,255,0.18);
+  border-color: rgba(64,158,255,0.35);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.22), 0 0 14px rgba(64,158,255,0.18);
+}
+.bulk-btn.bulk-read:hover:not(:disabled) {
+  background: rgba(64,158,255,0.26);
+  box-shadow: 0 12px 22px rgba(0,0,0,0.28), 0 0 18px rgba(64,158,255,0.30);
+}
+
+/* 一键删除 */
+.bulk-btn.bulk-del {
+  background: rgba(245,108,108,0.16);
+  border-color: rgba(245,108,108,0.32);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.22), 0 0 14px rgba(245,108,108,0.14);
+}
+.bulk-btn.bulk-del:hover:not(:disabled) {
+  background: rgba(245,108,108,0.22);
+  box-shadow: 0 12px 22px rgba(0,0,0,0.28), 0 0 18px rgba(245,108,108,0.24);
+}
+
 </style>

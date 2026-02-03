@@ -32,10 +32,10 @@
             <div v-if="activeTab === 'login'" key="login">
               <el-form :model="loginForm" label-position="top">
                 <el-form-item label="用户名">
-                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User" @keyup.enter="handleLogin", class="neon-input"></el-input>
+                  <el-input v-model="loginForm.username" placeholder="请输入用户名" :prefix-icon="User" @keyup.enter="handleLogin" class="neon-input"></el-input>
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" , class="neon-input"></el-input>
+                  <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" show-password @keyup.enter="handleLogin" class="neon-input"></el-input>
                 </el-form-item>
                 <div class="action-buttons">
                   <el-button type="primary" class="main-button breath-btn" :loading="loading" @click="handleLogin">立即登录</el-button>
@@ -47,10 +47,10 @@
             <div v-else key="register">
               <el-form :model="registerForm" label-position="top">
                 <el-form-item label="用户名">
-                  <el-input v-model="registerForm.username" placeholder="设置用户名" :prefix-icon="User" , class="neon-input"></el-input>
+                  <el-input v-model="registerForm.username" placeholder="设置用户名" :prefix-icon="User"  class="neon-input"></el-input>
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="registerForm.password" type="password" placeholder="设置密码" :prefix-icon="Lock" show-password , class="neon-input"></el-input>
+                  <el-input v-model="registerForm.password" type="password" placeholder="设置密码" :prefix-icon="Lock" show-password  class="neon-input"></el-input>
                 </el-form-item>
                 <div class="action-buttons">
                   <el-button type="success" class="main-button breath-btn" :loading="loading" @click="handleRegister">提交注册</el-button>
@@ -117,22 +117,26 @@ const validateForm = (form) => {
 }
 
 const handleLogin = () => {
-  if (!validateForm(loginForm)) return 
+  if (!validateForm(loginForm)) return
   loading.value = true
-  
+
   http.post('/user/login', loginForm)
-    .then(async token => {
-      authStore.setToken(token) 
-      // 登录成功直接去加载页，不在这里做判断
+    .then((loginData) => {
+      authStore.setLoginInfo(loginData)
+
       ElMessage({
         message: '[SYSTEM] AUTH_SUCCESS: 正在接入终端...',
         type: 'success',
-        plain: true // 开启纯净模式，方便样式覆盖
+        plain: true
       })
-      router.push('/loading') 
+
+      router.push('/loading')
     })
-    .finally(() => loading.value = false)
+    .finally(() => {
+      loading.value = false
+    })
 }
+
 
 const handleRegister = () => {
   if (!validateForm(registerForm)) return 
