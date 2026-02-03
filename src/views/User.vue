@@ -719,64 +719,87 @@ const rankData = ref([
 ])
 
 const onMarkAllRead = async () => {
-  // 接口后续实现：比如 POST /message/read/all 或 POST /message/read/batch
-  // 现在先做前端“假动作”，让 UI 先完整
+  if (inboxLoading.value) return
+
+  inboxLoading.value = true
   try {
-    // 1) 本地把当前页未读全部标已读
-    let changed = 0
+    // 拦截器已拆壳：这里 res 直接是影响行数，例如 11
+    const affected = Number(await http.post('/message/read-all') || 0)
+
+    if (affected <= 0) {
+      ElMessage.info('没有可标记的未读消息')
+      await fetchUnreadCount()
+      return
+    }
+
+    // 本地 UI：当前页未读置为已读（减少闪烁）
     inboxList.value.forEach((m) => {
       if (m.readStatus === 0) {
         m.readStatus = 1
         m.readTime = new Date().toISOString()
-        changed++
       }
     })
 
-    // 2) 未读数同步减少（只减少当前页改掉的数量，后端做完再全量刷新最稳）
-    if (changed > 0) {
-      unreadCount.value = Math.max(0, unreadCount.value - changed)
-      ElMessage.success(`已读 ${changed} 条`)
-    } else {
-      ElMessage.info('当前页没有未读消息')
-    }
+    // 未读角标：重新拉一次最稳
+    await fetchUnreadCount()
 
     activeMsgId.value = null
-  } catch (e) {}
+    ElMessage.success(`已读 ${affected} 条`)
+  } catch (e) {
+    // res.code != 200 时拦截器已经弹过错误了，这里不重复轰炸
+  } finally {
+    inboxLoading.value = false
+  }
 }
 
 const onDeleteAll = async () => {
-  // 接口后续实现：比如 DELETE /message 或 DELETE /message/batch
-  // 现在先做前端“假动作”
+  if (inboxLoading.value) return
+  if (!inboxList.value || inboxList.value.length === 0) {
+    ElMessage.info('当前页没有消息')
+    return
+  }
+
+  inboxLoading.value = true
   try {
-    const deletingCount = inboxList.value.length
-    if (deletingCount === 0) {
-      ElMessage.info('当前页没有消息')
+    // ⭐ 拦截器已拆壳，这里直接是影响行数，例如 15
+    const affected = Number(await http.delete('/message/delete-all') || 0)
+
+    if (affected <= 0) {
+      ElMessage.info('没有可删除的消息')
+      await fetchUnreadCount()
       return
     }
 
-    // 如果当前页里有未读，未读数也扣掉
-    const unreadDeleting = inboxList.value.filter((m) => m.readStatus === 0).length
-    if (unreadDeleting > 0) {
-      unreadCount.value = Math.max(0, unreadCount.value - unreadDeleting)
-    }
+    // ===== UI 本地同步（避免闪烁）=====
+    // 统计当前页被删的未读数（用于角标同步）
+    const unreadDeleting = inboxList.value.filter(m => m.readStatus === 0).length
 
     // 清空当前页
     inboxList.value = []
-    inboxTotal.value = Math.max(0, inboxTotal.value - deletingCount)
+
+    // 总数同步减少（防止分页怪异）
+    inboxTotal.value = Math.max(0, inboxTotal.value - affected)
+
+    // 未读角标重新拉一次（最稳）
+    await fetchUnreadCount()
+
     activeMsgId.value = null
 
-    ElMessage.success(`已删除当前页 ${deletingCount} 条`)
+    ElMessage.success(`已删除 ${affected} 条`)
 
-    // 当前页删空后，如果还有上一页，就回退再拉一次（保持体验）
+    // ⭐ 如果这一页删空了，自动回退分页（你的 UX 已经很高级了）
     if (inboxQuery.pageNum > 1) {
       inboxQuery.pageNum--
       await fetchInbox()
-    } else {
-      // 你也可以选择直接 fetchInbox() 让后端数据兜底
-      // await fetchInbox()
     }
-  } catch (e) {}
+
+  } catch (e) {
+    // 拦截器已经提示错误
+  } finally {
+    inboxLoading.value = false
+  }
 }
+
 
 </script>
 
