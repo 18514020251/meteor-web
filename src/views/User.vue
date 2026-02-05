@@ -53,19 +53,35 @@
               </div>
               
               <div class="movie-grid">
-                <div v-for="movie in hotMovies" :key="movie.id" class="glass-card">
+                <div v-for="movie in hotMovies" :key="movie.movieId" class="glass-card">
                   <div class="card-inner">
                     <div class="poster-box">
-                      <img :src="movie.poster" />
-                      <div class="badge" v-if="movie.isFlash">抢票中</div>
+                      <img :src="movie.posterUrl" />
+                      <div class="badge" v-if="movie.inGrabPeriod">抢票中</div>
                     </div>
-                    <div class="info-box">
-                      <h4>{{ movie.title }}</h4>
-                      <p>{{ movie.type }}</p>
+
+                     <div class="info-box">
+                       <h4 :title="movie.title">{{ movie.title }}</h4>
+                    
+                       <!-- 分类 -->
+                       <p class="cats">
+                         {{ (movie.categories || []).join(' / ') }}
+                       </p>
+
                       <div class="footer-action">
-                        <span class="score">{{ movie.score }}分</span>
-                        <el-button type="primary" size="small" round @click="handleGrab(movie)">
-                          {{ movie.isFlash ? '立即抢' : '预约' }}
+                        <!-- 价格 + 热度 -->
+                        <span class="score">
+                          ¥{{ formatPrice(movie.price) }}
+                          <span class="hot"> · 热度 {{ movie.hotScore }}</span>
+                        </span>
+                      
+                        <el-button
+                          type="primary"
+                          size="small"
+                          round
+                          @click="handleGrab(movie)"
+                        >
+                          {{ movie.inGrabPeriod ? '立即抢' : '预约' }}
                         </el-button>
                       </div>
                     </div>
@@ -697,26 +713,63 @@ const confirmLogout = () => {
 
 /** ========== 抢票按钮（占位） ========== */
 const handleGrab = (movie) => {
-  ElMessage.info(`正在尝试${movie.isFlash ? '抢购' : '预约'}: ${movie.title}`)
+  ElMessage.info(`正在尝试${movie.inGrabPeriod ? '抢购' : '预约'}: ${movie.title}（ID: ${movie.movieId}）`)
+  // TODO: 后续这里对接 ticket 模块：/tickets/grab?movieId=...
 }
 
-/** ========== 假数据 ========== */
-const hotMovies = ref([
-  { id: 1, title: '流浪地球 3', type: '科幻/冒险', score: '9.3', isFlash: true, poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300' },
-  { id: 2, title: '奥本海默', type: '剧情/传记', score: '8.8', isFlash: false, poster: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=300' },
-  { id: 3, title: '星际穿越', type: '科幻', score: '9.6', isFlash: true, poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300' },
-  { id: 4, title: '复仇者联盟', type: '英雄', score: '9.0', isFlash: true, poster: 'https://images.unsplash.com/photo-1509281373149-e957c6296406?w=300' },
-  { id: 5, title: '沙丘', type: '战争', score: '9.1', isFlash: false, poster: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300' },
-  { id: 6, title: '蝙蝠侠', type: '动作', score: '8.7', isFlash: true, poster: 'https://images.unsplash.com/photo-1531259683007-016a7b628fc3?w=300' }
-])
 
-const rankData = ref([
-  { name: '流浪地球 3', hot: '9982' },
-  { name: '星际穿越', hot: '8721' },
-  { name: '复仇者联盟', hot: '7655' },
-  { name: '奥本海默', hot: '5421' },
-  { name: '沙丘', hot: '4322' }
-])
+// ====== 主页电影数据 ======
+const hotMovies = ref([])
+const homeLoading = ref(false)
+
+const fetchHomeMovies = async () => {
+  homeLoading.value = true
+  try {
+    // GET /movies/home
+    const res = await http.get('/movies/home')
+
+    // 兼容两种封装：1) res 是完整 {code,msg,data}  2) res 已经是 data
+    const list = Array.isArray(res) ? res : (res?.data ?? [])
+
+    // 兜底：确保每个字段存在，避免模板爆炸
+    hotMovies.value = (list || []).map((m) => ({
+      movieId: m.movieId,
+      title: m.title,
+      posterUrl: m.posterUrl,
+      categories: Array.isArray(m.categories) ? m.categories : [],
+      price: Number(m.price ?? 0),          // 分
+      inGrabPeriod: !!m.inGrabPeriod,
+      hotScore: Number(m.hotScore ?? 0)
+    }))
+  } catch (e) {
+    hotMovies.value = []
+    ElMessage.error('主页电影加载失败')
+  } finally {
+    homeLoading.value = false
+  }
+}
+
+// 热度榜：取前 5，按 hotScore 倒序
+const rankData = computed(() => {
+  return [...(hotMovies.value || [])]
+    .sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0))
+    .slice(0, 5)
+    .map((m) => ({
+      name: m.title,
+      hot: m.hotScore
+    }))
+})
+
+// 分转元，显示两位小数
+const formatPrice = (fen) => {
+  const n = Number(fen || 0)
+  return (n / 100).toFixed(2)
+}
+
+onMounted(() => {
+  fetchHomeMovies()
+})
+
 
 const onMarkAllRead = async () => {
   if (inboxLoading.value) return
@@ -1577,6 +1630,20 @@ const onDeleteAll = async () => {
 .bulk-btn.bulk-del:hover:not(:disabled) {
   background: rgba(245,108,108,0.22);
   box-shadow: 0 12px 22px rgba(0,0,0,0.28), 0 0 18px rgba(245,108,108,0.24);
+}
+.cats {
+  color: rgba(255,255,255,0.55);
+  font-size: 11px;
+  margin: 5px 0 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hot {
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  font-size: 12px;
 }
 
 </style>

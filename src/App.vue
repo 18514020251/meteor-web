@@ -72,6 +72,65 @@ onMounted(() => {
 
 
 <style>
+/* 侧边菜单 hover 修正 */
+/* =========================
+   Element Plus 全局暗黑 Hover
+   ========================= */
+
+/* el-button link 悬浮白色修正 */
+.el-button.is-link:hover {
+  background: rgba(255,255,255,0.06) !important;
+  color: #7fd4ff !important;
+}
+
+/* 普通按钮 hover */
+.el-button:hover {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* menu hover */
+.el-menu-item:hover {
+  background: rgba(255,255,255,0.06) !important;
+}
+
+.el-menu-item.is-active {
+  background: rgba(0,180,255,0.15) !important;
+}
+
+/* dropdown / select hover */
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background: rgba(255,255,255,0.06) !important;
+}
+
+/* segmented hover（你 inbox 在用） */
+.el-segmented__item:hover {
+  background: rgba(255,255,255,0.08) !important;
+}
+
+/* pagination hover */
+.el-pager li:hover {
+  background: rgba(255,255,255,0.08) !important;
+}
+
+/* 表格 hover 行 */
+.el-table__body tr:hover > td {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+/* message card 内 icon 按钮 */
+.icon-glass-btn:hover {
+  background: rgba(255,255,255,0.06) !important;
+  backdrop-filter: blur(6px);
+}
+
+/* segmented 选中态统一 */
+.el-segmented__item.is-selected {
+  background: rgba(0,180,255,0.18) !important;
+  color: #7fd4ff !important;
+}
+
 /* 1. 彻底清除基础样式，取消 body 的 flex 居中 */
 html, body {
   margin: 0;

@@ -6,6 +6,7 @@
         <div v-for="n in 6" :key="n" class="meteor"></div>
       </div>
 
+      <!-- 顶部导航（保持不动） -->
       <header class="glass-nav">
         <div v-if="userData" class="nav-content">
           <div class="brand">METEOR <span class="sub">ADMIN</span></div>
@@ -15,7 +16,7 @@
               <span class="name">{{ userData.username }}</span>
               <span class="role">ADMIN ID: {{ userData.userId || '000' }}</span>
             </div>
-            
+
             <el-avatar
               :size="42"
               :src="userData.avatar"
@@ -28,19 +29,474 @@
         </div>
       </header>
 
+      <!-- 主体：左侧导航 + 右侧内容 -->
       <main class="content-body">
-        <div class="glass-section admin-placeholder">
-          <div class="section-title">
-            <el-icon><Monitor /></el-icon> 管理控制台 / System Overview
-          </div>
-          <div class="empty-state">
-            <p>欢迎回来，系统管理员</p>
-            <span>功能模块正在准备中...</span>
-          </div>
+        <div class="admin-layout">
+          <!-- 左侧导航栏 -->
+          <aside class="side-nav glass-section">
+            <div class="side-title">
+              <div class="side-title-main">
+                <el-icon><Monitor /></el-icon>
+                控制台
+              </div>
+              <div class="side-title-sub">System Overview</div>
+            </div>
+
+            <el-input
+              v-model="menuKeyword"
+              class="side-search"
+              placeholder="筛选功能…"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+
+            <el-menu
+              class="side-menu"
+              :default-active="activeMenu"
+              @select="handleSelectMenu"
+            >
+              <el-menu-item
+                v-for="item in filteredMenus"
+                :key="item.key"
+                :index="item.key"
+              >
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.label }}</span>
+                <span v-if="item.badge != null" class="menu-badge">{{ item.badge }}</span>
+              </el-menu-item>
+
+              <div class="side-divider"></div>
+
+            <a
+              :href="MQ_CONSOLE_URL"
+              target="_blank"
+              class="side-menu-link"
+            >
+              <div class="el-menu-item">
+                <el-icon><Link /></el-icon>
+                <span>Rabbti MQ 控制台</span>
+              </div>
+            </a>
+            <a
+              :href="NACOS_CONSOLE_URL"
+              target="_blank"
+              class="side-menu-link"
+            >
+              <div class="el-menu-item">
+                <el-icon><Link /></el-icon>
+                <span>Nacos 控制台</span>
+              </div>
+            </a>
+            <a
+              :href="MINIO_CONSOLE_URL"
+              target="_blank"
+              class="side-menu-link"
+            >
+              <div class="el-menu-item">
+                <el-icon><Link /></el-icon>
+                <span>MinIO 控制台</span>
+              </div>
+            </a>
+
+            </el-menu>
+
+            <div class="side-footer">
+              <div class="side-tip">
+                <span class="dot"></span>
+                数据为前端模拟，后端接上再说。
+              </div>
+            </div>
+          </aside>
+
+          <!-- 右侧内容区 -->
+          <section class="main-panel">
+            <!-- 头部概览卡片 -->
+            <div class="kpi-grid">
+              <div class="kpi glass-section kpi-anim" style="--d: 0">
+                <div class="kpi-top">
+                  <span class="kpi-label">今日注册</span>
+                  <el-tag size="small" effect="dark" type="info">Today</el-tag>
+                </div>
+                <div class="kpi-value">{{ kpi.todayRegister }}</div>
+                <div class="kpi-foot">
+                  <span class="kpi-sub">近7日均值：{{ kpi.avg7Register }}</span>
+                  <span class="kpi-chip" :class="kpi.todayRegister >= kpi.avg7Register ? 'up' : 'down'">
+                    {{ kpi.todayRegister >= kpi.avg7Register ? '↑' : '↓' }}
+                    {{ Math.abs(kpi.todayRegister - kpi.avg7Register) }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="kpi glass-section kpi-anim" style="--d: 1">
+                <div class="kpi-top">
+                  <span class="kpi-label">今日订单</span>
+                  <el-tag size="small" effect="dark" type="success">Orders</el-tag>
+                </div>
+                <div class="kpi-value">{{ kpi.todayOrders }}</div>
+                <div class="kpi-foot">
+                  <span class="kpi-sub">近7日均值：{{ kpi.avg7Orders }}</span>
+                  <span class="kpi-chip" :class="kpi.todayOrders >= kpi.avg7Orders ? 'up' : 'down'">
+                    {{ kpi.todayOrders >= kpi.avg7Orders ? '↑' : '↓' }}
+                    {{ Math.abs(kpi.todayOrders - kpi.avg7Orders) }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="kpi glass-section kpi-anim" style="--d: 2">
+                <div class="kpi-top">
+                  <span class="kpi-label">成功率</span>
+                  <el-tag size="small" effect="dark" type="warning">Success</el-tag>
+                </div>
+                <div class="kpi-value">{{ kpi.successRate }}%</div>
+                <div class="kpi-foot">
+                  <span class="kpi-sub">成功/失败：{{ kpi.successCount }}/{{ kpi.failCount }}</span>
+                  <span class="kpi-chip warn">SLA</span>
+                </div>
+              </div>
+
+              <div class="kpi glass-section kpi-anim" style="--d: 3">
+                <div class="kpi-top">
+                  <span class="kpi-label">待审核商家</span>
+                  <el-tag size="small" effect="dark" type="danger">Review</el-tag>
+                </div>
+                <div class="kpi-value">{{ kpi.pendingMerchants }}</div>
+                <div class="kpi-foot">
+                  <span class="kpi-sub">MQ 待补发：{{ kpi.mqPending }}</span>
+                  <span class="kpi-chip danger">{{ kpi.mqFail }} fail</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 页面容器：不再 out-in 销毁 DOM，只做淡入 -->
+            <transition name="fade-fast">
+              <div class="page-wrap">
+                <!-- Dashboard：v-show 保留 DOM -->
+                <div v-show="activeMenu === 'dashboard'">
+                  <div class="grid-2">
+                    <div class="glass-section chart-card chart-anim" style="--d: 0">
+                      <div class="section-title">
+                        <el-icon><TrendCharts /></el-icon> 近7天注册趋势
+                      </div>
+                      <div ref="regChartRef" class="chart-box"></div>
+                    </div>
+
+                    <div class="glass-section chart-card chart-anim" style="--d: 1">
+                      <div class="section-title">
+                        <el-icon><Histogram /></el-icon> 近7天订单量
+                      </div>
+                      <div ref="orderChartRef" class="chart-box"></div>
+                    </div>
+                  </div>
+
+                  <div class="grid-2">
+                    <div class="glass-section chart-card chart-anim" style="--d: 2">
+                      <div class="section-title">
+                        <el-icon><PieChart /></el-icon> 状态分布
+                      </div>
+                      <div ref="statusChartRef" class="chart-box"></div>
+                    </div>
+
+                    <div class="glass-section chart-card chart-anim" style="--d: 3">
+                      <div class="section-title">
+                        <el-icon><Bell /></el-icon> MQ 失败 / 待补发
+                      </div>
+
+                      <div class="mq-list">
+                        <div v-for="m in mqMock" :key="m.id" class="mq-item">
+                          <div class="mq-left">
+                            <div class="mq-title">
+                              <span class="mq-tag" :class="m.level">{{ m.level.toUpperCase() }}</span>
+                              <span class="mq-name">{{ m.name }}</span>
+                            </div>
+                            <div class="mq-meta">
+                              <span>routingKey: {{ m.routingKey }}</span>
+                              <span>msgId: {{ m.msgId }}</span>
+                            </div>
+                          </div>
+                          <div class="mq-right">
+                            <el-tag size="small" :type="m.status === 'PENDING' ? 'warning' : 'danger'">
+                              {{ m.status }}
+                            </el-tag>
+                            <el-button size="small" type="primary" plain @click="mockResend(m)">补发</el-button>
+                          </div>
+                        </div>
+
+                        <div v-if="mqMock.length === 0" class="empty-hint">暂无失败消息，奇迹发生了。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="grid-2">
+                    <div class="glass-section chart-card chart-anim" style="--d: 4">
+                      <div class="section-title">
+                        <el-icon><UserFilled /></el-icon> 待审核商家申请
+                      </div>
+
+                      <el-table
+                         v-loading="loadingPendingMerchant"
+                        :data="pendingMerchantMock"
+                        height="260"
+                        class="dark-table"
+                        :header-cell-style="{ background: 'rgba(255,255,255,0.04)', color: '#cfe9ff', borderBottom: '1px solid rgba(255,255,255,0.08)' }"
+                        :row-style="{ background: 'transparent', color: '#fff' }"
+                      >
+                        <el-table-column prop="applyId" label="applyId" width="120" />
+                        <el-table-column prop="shopName" label="店铺名" min-width="140" />
+                        <el-table-column prop="userId" label="userId" width="90" />
+                        <el-table-column prop="reason" label="申请理由" min-width="200" />
+                        <el-table-column label="操作" width="160">
+                          <template #default="{ row }">
+                            <el-button size="small" type="success" plain @click="approveApply(row)">通过</el-button>
+                            <el-button size="small" type="danger" plain @click="openRejectDialog(row)">拒绝</el-button>
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    </div>
+
+                    <div class="glass-section chart-card chart-anim" style="--d: 5">
+                      <div class="section-title">
+                        <el-icon><DataAnalysis /></el-icon> 快捷视图
+                      </div>
+
+                      <div class="quick-grid">
+                        <div class="quick-card">
+                          <p>近7日平均注册</p>
+                          <h3>{{ kpi.avg7Register }}</h3>
+                        </div>
+                        <div class="quick-card">
+                          <p>近7日平均订单</p>
+                          <h3>{{ kpi.avg7Orders }}</h3>
+                        </div>
+                        <div class="quick-card">
+                          <p>订单成功率</p>
+                          <h3 :class="kpi.successRate >= 95 ? 'good' : 'warn'">{{ kpi.successRate }}%</h3>
+                        </div>
+                        <div class="quick-card">
+                          <p>待审核商家</p>
+                          <h3 class="warn">{{ kpi.pendingMerchants }}</h3>
+                        </div>
+                      </div>
+
+                      <div class="mini-note">
+                        这里以后可以塞你想要的“在线用户数 / 热门接口 / 慢查询榜”，折磨自己挺在行的。
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 注册：v-show -->
+                <div v-show="activeMenu === 'register'">
+                  <div class="glass-section single-page">
+                    <div class="section-title">
+                      <el-icon><TrendCharts /></el-icon> 注册分析（模拟）
+                    </div>
+                    <div class="single-grid">
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">今日注册</div>
+                        <div class="inner-value">{{ kpi.todayRegister }}</div>
+                      </div>
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">近7日均值</div>
+                        <div class="inner-value">{{ kpi.avg7Register }}</div>
+                      </div>
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">趋势图</div>
+                        <div ref="regChartRef2" class="chart-box small"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 订单：v-show -->
+                <div v-show="activeMenu === 'orders'">
+                  <div class="glass-section single-page">
+                    <div class="section-title">
+                      <el-icon><Histogram /></el-icon> 订单分析（模拟）
+                    </div>
+                    <div class="single-grid">
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">今日订单</div>
+                        <div class="inner-value">{{ kpi.todayOrders }}</div>
+                      </div>
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">成功率</div>
+                        <div class="inner-value">{{ kpi.successRate }}%</div>
+                      </div>
+                      <div class="glass-section inner-card">
+                        <div class="inner-title">订单量图</div>
+                        <div ref="orderChartRef2" class="chart-box small"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 审核：v-show -->
+                <div v-show="activeMenu === 'review'">
+                  <div class="glass-section single-page">
+                    <div class="section-title">
+                      <el-icon><UserFilled /></el-icon> 审核中心（模拟）
+                    </div>
+
+                    <div class="review-actions">
+                      <el-button type="primary" plain @click="mockRefresh">刷新</el-button>
+                      <el-button type="warning" plain @click="mockBatchResend">批量补发 MQ</el-button>
+                      <el-button type="danger" plain @click="mockClearMq">清空 MQ 列表</el-button>
+                    </div>
+
+                    <div class="grid-2">
+                      <div class="glass-section chart-card">
+                        <div class="section-title">
+                          <el-icon><PieChart /></el-icon> 状态分布
+                        </div>
+                        <div ref="statusChartRef2" class="chart-box"></div>
+                      </div>
+
+                      <div class="glass-section chart-card">
+                        <div class="section-title">
+                          <el-icon><Bell /></el-icon> MQ 失败 / 待补发
+                        </div>
+                        <div class="mq-list">
+                          <div v-for="m in mqMock" :key="m.id" class="mq-item">
+                            <div class="mq-left">
+                              <div class="mq-title">
+                                <span class="mq-tag" :class="m.level">{{ m.level.toUpperCase() }}</span>
+                                <span class="mq-name">{{ m.name }}</span>
+                              </div>
+                              <div class="mq-meta">
+                                <span>routingKey: {{ m.routingKey }}</span>
+                                <span>msgId: {{ m.msgId }}</span>
+                              </div>
+                            </div>
+                            <div class="mq-right">
+                              <el-tag size="small" :type="m.status === 'PENDING' ? 'warning' : 'danger'">
+                                {{ m.status }}
+                              </el-tag>
+                              <el-button size="small" type="primary" plain @click="mockResend(m)">补发</el-button>
+                            </div>
+                          </div>
+                          <div v-if="mqMock.length === 0" class="empty-hint">居然没有需要补发的消息</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="glass-section chart-card">
+                      <div class="section-title">
+                        <el-icon><Document /></el-icon> 待审核商家申请
+                      </div>
+                      <el-table
+                          v-loading="loadingPendingMerchant"
+                        :data="pendingMerchantMock"
+                        height="320"
+                        class="dark-table"
+                        :header-cell-style="{ background: 'rgba(255,255,255,0.04)', color: '#cfe9ff', borderBottom: '1px solid rgba(255,255,255,0.08)' }"
+                        :row-style="{ background: 'transparent', color: '#fff' }"
+                      >
+                        <el-table-column prop="applyId" label="applyId" width="120" />
+                        <el-table-column prop="shopName" label="店铺名" min-width="140" />
+                        <el-table-column prop="userId" label="userId" width="90" />
+                        <el-table-column prop="reason" label="申请理由" min-width="280" />
+                        <el-table-column label="操作" width="180">
+                          <template #default="{ row }">
+                            <el-button size="small" type="success" plain @click="mockApprove(row)">通过</el-button>
+                            <el-button size="small" type="danger" plain @click="openRejectDialog(row)">拒绝</el-button>
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 嵌入控制台：iframe（保留 v-if） -->
+                <div v-if="activeMenu.startsWith('embed-')">
+                  <div class="glass-section single-page">
+                    <div class="section-title">
+                      <el-icon><Link /></el-icon>
+                      {{ embedTitle }}
+                      <el-tag size="small" effect="dark" type="info">iframe 预留</el-tag>
+                    </div>
+
+                    <div class="embed-toolbar">
+                      <el-input v-model="embedUrl" placeholder="填入控制台 URL，例如 http://localhost:15672" clearable />
+                      <el-button type="primary" plain @click="applyEmbedUrl">加载</el-button>
+                      <el-button type="warning" plain @click="resetEmbedUrl">重置</el-button>
+                    </div>
+
+                    <div class="embed-box">
+                      <iframe
+                        v-if="embedUrlApplied"
+                        :src="embedUrlApplied"
+                        frameborder="0"
+                        class="embed-frame"
+                      />
+                      <div v-else class="embed-empty">
+                        <div class="embed-empty-title">还没加载 URL</div>
+                        <div class="embed-empty-sub">
+                          你以后要嵌 Nacos / RabbitMQ / MinIO 控制台，就把地址填这里。然后再去处理跨域、鉴权、cookie、iframe 限制这些快乐问题。
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 兜底 -->
+                <div v-show="!mainPageKeys.includes(activeMenu) && !activeMenu.startsWith('embed-')" class="glass-section admin-placeholder">
+                  <div class="section-title">
+                    <el-icon><Monitor /></el-icon> 管理控制台 / System Overview
+                  </div>
+                  <div class="empty-state">
+                    <p>欢迎回来，系统管理员</p>
+                    <span>模块 {{ activeMenu }} 正在准备中...</span>
+                  </div>
+                </div>
+              </div>
+            </transition>
+          </section>
         </div>
       </main>
+
+ <el-dialog
+  v-model="rejectDialog.visible"
+  title="拒绝申请"
+  width="420px"
+  :close-on-click-modal="false"
+  :destroy-on-close="true"
+  class="pure-dark-glass" 
+>
+  <div class="reject-hint">
+    请输入拒绝理由（将同步至申请记录）
+  </div>
+
+  <el-input
+    v-model="rejectDialog.reason"
+    type="textarea"
+    :rows="4"
+    maxlength="200"
+    show-word-limit
+    placeholder="理由描述..."
+    class="dark-input"
+  />
+
+  <template #footer>
+    <div class="dialog-footer">
+      <el-button @click="rejectDialog.visible = false" class="btn-dark-cancel">取消操作</el-button>
+      <el-button
+        type="danger"
+        :loading="rejectDialog.submitting"
+        @click="confirmReject"
+        class="btn-dark-confirm"
+      >
+        确认拒绝
+      </el-button>
+    </div>
+  </template>
+</el-dialog>
+
     </div>
 
+    <!-- 个人面板（保持不动） -->
     <transition name="slide-right">
       <div v-if="showProfilePanel" class="profile-panel-overlay" @click.self="showProfilePanel = false">
         <div class="profile-glass-panel">
@@ -51,11 +507,11 @@
 
           <div class="profile-content">
             <div class="avatar-edit-section">
-              <el-image 
+              <el-image
                 class="avatar-glow preview-avatar"
-                :src="userData.avatar" 
+                :src="userData.avatar"
                 :preview-src-list="[userData.avatar]"
-                :preview-teleported="true" 
+                :preview-teleported="true"
                 fit="cover"
               />
               <p class="uid-tag">ADMIN ID: {{ userData.userId }}</p>
@@ -96,6 +552,7 @@
       </div>
     </transition>
 
+    <!-- 退出确认（保持不动） -->
     <transition name="fade">
       <div v-if="showLogoutConfirm" class="logout-overlay">
         <div class="logout-glass-card">
@@ -112,13 +569,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, watchEffect, onBeforeUnmount } from 'vue'
-import { Monitor, SwitchButton, Warning, Close, User, Iphone, Lock } from '@element-plus/icons-vue'
+import { ref, reactive, watchEffect, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import {
+  Monitor, SwitchButton, Warning, Close, User, Iphone, Lock,
+  Search, TrendCharts, Histogram, PieChart, Bell, UserFilled, DataAnalysis, Link, Document
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import http from '../request/http'
+import * as echarts from 'echarts'
 
 /** ========== 基础核心 ========== */
 const router = useRouter()
@@ -131,11 +592,7 @@ const showProfilePanel = ref(false)
 const countdown = ref(0)
 let countdownTimer = null
 
-const profileForm = reactive({
-  username: '',
-  phone: '',
-  code: ''
-})
+const profileForm = reactive({ username: '', phone: '', code: '' })
 
 watchEffect(() => {
   if (!userData.value) return
@@ -143,7 +600,7 @@ watchEffect(() => {
   profileForm.phone = userData.value.phone || ''
 })
 
-/** ========== 验证码逻辑 (与User页面一致) ========== */
+/** ========== 验证码逻辑 ========== */
 const startCountdown = () => {
   countdown.value = 60
   countdownTimer = setInterval(() => {
@@ -156,7 +613,6 @@ const sendCode = async () => {
   if (countdown.value > 0) return
   const phone = String(profileForm.phone || '').trim()
   if (!/^1[3-9]\d{9}$/.test(phone)) return ElMessage.warning('手机号格式不正确')
-
   try {
     await http.post('/user/phone/code', { phone, scene: 'BIND_PHONE' })
     ElMessage.success('验证码已发送至管理员手机')
@@ -164,7 +620,7 @@ const sendCode = async () => {
   } catch (e) {}
 }
 
-/** ========== 资料更新逻辑 (支持单改/双改) ========== */
+/** ========== 资料更新逻辑 ========== */
 const handleUpdate = async () => {
   const oldU = String(userData.value?.username || '').trim()
   const oldP = String(userData.value?.phone || '').trim()
@@ -172,7 +628,7 @@ const handleUpdate = async () => {
   const newP = String(profileForm.phone || '').trim()
 
   if (newU === oldU && newP === oldP) return ElMessage.info('未做任何修改')
-  
+
   const payload = {}
   if (newU !== oldU) payload.username = newU
   if (newP !== oldP) {
@@ -189,7 +645,7 @@ const handleUpdate = async () => {
   } catch (e) {}
 }
 
-/** ========== 头像上传 (与User页面一致) ========== */
+/** ========== 头像上传 ========== */
 const beforeAvatarUpload = (file) => {
   const isImg = file.type.startsWith('image/') && file.size / 1024 / 1024 <= 5
   if (!isImg) ElMessage.warning('请上传5MB以内的图片')
@@ -214,10 +670,336 @@ const confirmLogout = () => {
   showLogoutConfirm.value = false
 }
 
-onBeforeUnmount(() => clearInterval(countdownTimer))
+/** ========== 左侧菜单与页面状态 ========== */
+const activeMenu = ref('dashboard')
+const menuKeyword = ref('')
+const mainPageKeys = ['dashboard', 'register', 'orders', 'review']
+
+const menus = [
+  { key: 'dashboard', label: '仪表盘', icon: Monitor },
+  { key: 'register', label: '注册分析', icon: TrendCharts },
+  { key: 'orders', label: '订单分析', icon: Histogram },
+  { key: 'review', label: '审核中心', icon: UserFilled }
+]
+
+const filteredMenus = computed(() => {
+  const kw = String(menuKeyword.value || '').trim().toLowerCase()
+  const base = kw ? menus.filter(m => m.label.toLowerCase().includes(kw)) : menus
+  return base.map(m => (m.key === 'review' ? { ...m, badge: kpi.value.pendingMerchants } : { ...m, badge: null }))
+})
+
+const handleSelectMenu = (key) => {
+  if (key === 'embed-minio') {
+    window.open(MINIO_CONSOLE_URL, '_blank')
+    return
+  }
+  activeMenu.value = key
+}
+
+/** ========== 模拟数据 ========== */
+const days = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
+const regSeries = ref([82, 96, 105, 91, 120, 112, 128])
+const orderSeries = ref([210, 260, 230, 280, 310, 295, 330])
+const successSeries = ref({ success: 318, fail: 12 })
+
+const statusDist = ref([
+  { name: 'NORMAL', value: 68 },
+  { name: 'PENDING', value: 19 },
+  { name: 'REJECTED', value: 7 },
+  { name: 'BANNED', value: 6 }
+])
+
+const pendingMerchantMock = ref([])  // 先别改模板变量名，少动
+const pendingMerchantTotal = ref(0)
+const loadingPendingMerchant = ref(false)
+
+const MerchantApplyStatus = {
+  PENDING: 0,
+  APPROVED: 1,
+  REJECTED: 2
+}
+
+const unwrap = (res) => res?.data?.data ?? res?.data ?? res
+
+const fetchPendingMerchantApplies = async () => {
+  loadingPendingMerchant.value = true
+  try {
+    const params = {
+      status: MerchantApplyStatus.PENDING,
+      pageNum: 1,
+      pageSize: 20
+    }
+    const res = await http.get('/admin/merchant-apply', { params })
+    const page = unwrap(res)
+
+    pendingMerchantMock.value = (page?.records || []).map(r => ({
+      applyId: r.applyId,
+      shopName: r.shopName,
+      userId: r.userId,
+      reason: r.applyReason
+    }))
+    
+
+    pendingMerchantTotal.value = page?.total ?? 0
+
+    console.log('page=', page)
+    console.log('pendingMerchantMock=', pendingMerchantMock.value)
+  } finally {
+    loadingPendingMerchant.value = false
+  }
+}
+
+
+
+
+const mqMock = ref([
+  { id: 1, level: 'warn', name: 'merchant.reviewed', routingKey: 'merchant.apply.reviewed', msgId: 'evt:2755478653', status: 'PENDING' },
+  { id: 2, level: 'error', name: 'order.created', routingKey: 'order.created', msgId: 'evt:2755479101', status: 'FAILED' },
+  { id: 3, level: 'warn', name: 'user.password.changed', routingKey: 'user.password.changed', msgId: 'evt:2755480002', status: 'PENDING' }
+])
+
+const kpi = computed(() => {
+  const todayRegister = regSeries.value[regSeries.value.length - 1]
+  const avg7Register = Math.round(regSeries.value.reduce((a, b) => a + b, 0) / regSeries.value.length)
+  const todayOrders = orderSeries.value[orderSeries.value.length - 1]
+  const avg7Orders = Math.round(orderSeries.value.reduce((a, b) => a + b, 0) / orderSeries.value.length)
+
+  const successCount = successSeries.value.success
+  const failCount = successSeries.value.fail
+  const successRate = Math.round((successCount / (successCount + failCount)) * 100)
+
+  const pendingMerchants = pendingMerchantMock.value.length
+  const mqPending = mqMock.value.filter(x => x.status === 'PENDING').length
+  const mqFail = mqMock.value.filter(x => x.status === 'FAILED').length
+
+  return { todayRegister, avg7Register, todayOrders, avg7Orders, successCount, failCount, successRate, pendingMerchants, mqPending, mqFail }
+})
+
+/** ========== 预留：iframe 嵌入控制台 ========== */
+const MINIO_CONSOLE_URL = 'http://localhost:9001/browser'
+const NACOS_CONSOLE_URL = 'http://localhost:8848/nacos'
+const MQ_CONSOLE_URL = 'http://localhost:15672/'
+const embedUrl = ref('')
+const embedUrlApplied = ref('')
+const embedTitle = computed(() => {
+  if (activeMenu.value === 'embed-nacos') return 'Nacos 控制台'
+  if (activeMenu.value === 'embed-mq') return 'RabbitMQ 控制台'
+  if (activeMenu.value === 'embed-minio') return 'MinIO 控制台'
+  return '控制台嵌入'
+})
+
+
+const applyEmbedUrl = () => {
+  const u = String(embedUrl.value || '').trim()
+  if (!u) return ElMessage.warning('先填 URL')
+  embedUrlApplied.value = u
+  ElMessage.success('已加载 iframe（如果没显示，多半是被 X-Frame-Options 拒了）')
+}
+const resetEmbedUrl = () => {
+  embedUrl.value = ''
+  embedUrlApplied.value = ''
+}
+
+/** ========== 模拟交互 ========== */
+const mockResend = (m) => { ElMessage.success(`已触发补发：${m.name}`); m.status = 'PENDING' }
+const mockReject = (row) => { ElMessage.warning(`已拒绝：${row.shopName}`); pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== row.applyId) }
+const mockRefresh = () => ElMessage.success('已刷新（假的）')
+const mockBatchResend = () => ElMessage.success('批量补发已触发（假的，但你会实现真的）')
+const mockClearMq = () => { mqMock.value = []; ElMessage.success('已清空 MQ 列表') }
+
+const approveApply = async (row) => {
+  const applyId = row?.applyId
+  if (!applyId) return ElMessage.warning('applyId 不存在')
+
+  try {
+    await http.post(`/admin/merchant-apply/${applyId}/approve`)
+    ElMessage.success(`已通过：${row.shopName || applyId}`)
+
+    // ✅ 方式A：本地移除（最快）
+    pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== applyId)
+
+    pendingMerchantTotal.value = Math.max(0, (pendingMerchantTotal.value || 0) - 1)
+
+  } catch (e) {}
+}
+
+const rejectDialog = reactive({
+  visible: false,
+  reason: '',
+  submitting: false,
+  row: null
+})
+
+const openRejectDialog = (row) => {
+  if (!row?.applyId) return ElMessage.warning('applyId 不存在')
+  rejectDialog.row = row
+  rejectDialog.reason = ''
+  rejectDialog.visible = true
+}
+
+const confirmReject = async () => {
+  const row = rejectDialog.row
+  const applyId = row?.applyId
+  const reason = String(rejectDialog.reason || '').trim()
+
+  if (!applyId) return ElMessage.warning('applyId 不存在')
+  if (!reason) return ElMessage.warning('请填写拒绝理由')
+  if (reason.length > 200) return ElMessage.warning('拒绝理由最多 200 字')
+
+  rejectDialog.submitting = true
+  try {
+    await http.post(`/admin/merchant-apply/${applyId}/reject`, {
+      rejectReason: reason
+    })
+
+    ElMessage.success(`已拒绝：${row.shopName || applyId}`)
+
+    pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== applyId)
+    pendingMerchantTotal.value = Math.max(0, (pendingMerchantTotal.value || 0) - 1)
+
+    rejectDialog.visible = false
+  } catch (e) {
+  } finally {
+    rejectDialog.submitting = false
+  }
+}
+
+
+/** ========== ECharts ========== */
+const regChartRef = ref(null)
+const orderChartRef = ref(null)
+const statusChartRef = ref(null)
+const regChartRef2 = ref(null)
+const orderChartRef2 = ref(null)
+const statusChartRef2 = ref(null)
+
+let regChart, orderChart, statusChart
+let regChart2, orderChart2, statusChart2
+
+const buildLineOption = (title, x, y) => ({
+  tooltip: { trigger: 'axis' },
+  grid: { left: 40, right: 20, top: 30, bottom: 30 },
+  xAxis: {
+    type: 'category',
+    data: x,
+    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.25)' } },
+    axisLabel: { color: 'rgba(255,255,255,0.7)' }
+  },
+  yAxis: {
+    type: 'value',
+    axisLine: { show: false },
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+    axisLabel: { color: 'rgba(255,255,255,0.7)' }
+  },
+  series: [{ name: title, type: 'line', smooth: true, data: y, symbolSize: 7, areaStyle: { opacity: 0.12 } }]
+})
+
+const buildBarOption = (title, x, y) => ({
+  tooltip: { trigger: 'axis' },
+  grid: { left: 40, right: 20, top: 30, bottom: 30 },
+  xAxis: {
+    type: 'category',
+    data: x,
+    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.25)' } },
+    axisLabel: { color: 'rgba(255,255,255,0.7)' }
+  },
+  yAxis: {
+    type: 'value',
+    axisLine: { show: false },
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+    axisLabel: { color: 'rgba(255,255,255,0.7)' }
+  },
+  series: [{ name: title, type: 'bar', data: y, barWidth: 18, itemStyle: { borderRadius: [8, 8, 0, 0], opacity: 0.9 } }]
+})
+
+const buildPieOption = (data) => ({
+  tooltip: { trigger: 'item' },
+  legend: { top: 10, textStyle: { color: 'rgba(255,255,255,0.75)' } },
+  series: [{
+    name: '状态',
+    type: 'pie',
+    radius: ['35%', '65%'],
+    center: ['50%', '58%'],
+    data,
+    label: { color: 'rgba(255,255,255,0.8)' },
+    labelLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } }
+  }]
+})
+
+/** ✅ 关键：只 init 一次，不要 dispose 反复折磨 */
+const safeInit = (domRef, oldChart) => {
+  if (!domRef?.value) return null
+  if (oldChart) return oldChart
+  return echarts.init(domRef.value)
+}
+
+/** ✅ mounted 时把所有图表都初始化并 setOption */
+const renderAllCharts = () => {
+  regChart = safeInit(regChartRef, regChart)
+  orderChart = safeInit(orderChartRef, orderChart)
+  statusChart = safeInit(statusChartRef, statusChart)
+  regChart?.setOption(buildLineOption('注册', days, regSeries.value), true)
+  orderChart?.setOption(buildBarOption('订单', days, orderSeries.value), true)
+  statusChart?.setOption(buildPieOption(statusDist.value), true)
+
+  regChart2 = safeInit(regChartRef2, regChart2)
+  regChart2?.setOption(buildLineOption('注册', days, regSeries.value), true)
+
+  orderChart2 = safeInit(orderChartRef2, orderChart2)
+  orderChart2?.setOption(buildBarOption('订单', days, orderSeries.value), true)
+
+  statusChart2 = safeInit(statusChartRef2, statusChart2)
+  statusChart2?.setOption(buildPieOption(statusDist.value), true)
+}
+
+const handleResize = () => {
+  ;[regChart, orderChart, statusChart, regChart2, orderChart2, statusChart2].forEach(c => c?.resize())
+}
+
+/** ✅ 切换菜单：v-show 让容器从 display:none 变可见，必须 resize */
+watch(activeMenu, async () => {
+  // ✅ 自动加载 MinIO 控制台（写死）
+  if (activeMenu.value === 'embed-minio') {
+    embedUrl.value = MINIO_CONSOLE_URL
+    embedUrlApplied.value = MINIO_CONSOLE_URL
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => handleResize())
+})
+
+onMounted(async () => {
+  await nextTick()
+  renderAllCharts()
+  handleResize()
+  window.addEventListener('resize', handleResize)
+
+  await fetchPendingMerchantApplies()
+})
+
+onBeforeUnmount(() => {
+  clearInterval(countdownTimer)
+  window.removeEventListener('resize', handleResize)
+  ;[regChart, orderChart, statusChart, regChart2, orderChart2, statusChart2].forEach(c => c?.dispose())
+})
 </script>
 
+
 <style scoped>
+.side-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.side-menu-link {
+  text-decoration: none;
+  display: block;
+}
+
+.side-menu-link .el-menu-item {
+  cursor: pointer;
+}
 /* ================== 1. 布局与背景 ================== */
 .user-wrapper { width: 100vw; height: 100vh; overflow: hidden; position: relative; }
 .login-container { width: 100%; height: 100%; background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%); overflow-y: auto; }
@@ -237,66 +1019,173 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
 .exit-btn { color: #fff; font-size: 20px; }
 .exit-btn:hover { color: #f56c6c; }
 
-/* ================== 2. 电影卡片 ================== */
-.content-body { max-width: 1300px; margin: 30px auto; padding: 0 20px; }
-.movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
+/* ================== 2. 主体布局（新增 admin layout） ================== */
+.content-body { max-width: 1400px; margin: 24px auto; padding: 0 20px; }
+.admin-layout { display: flex; gap: 18px; align-items: flex-start; }
 
-.glass-card {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden; /* 裁剪超出边框的流光 */
-  padding: 2px;    /* 这里的 padding 就是流光边框的粗细 */
-  background: rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
-  display: flex;
+/* 左侧栏 */
+.side-nav {
+  width: 270px;
+  position: sticky;
+  top: 90px;
+  padding: 18px;
+  overflow: hidden;
 }
+.side-title { margin-bottom: 14px; }
+.side-title-main { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; }
+.side-title-sub { color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 6px; }
+.side-search { margin: 12px 0 10px; }
+.side-menu {
+  background: transparent !important;
+  border-right: none !important;
+}
+.menu-badge {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(245, 108, 108, 0.45);
+  border: 1px solid rgba(245, 108, 108, 0.35);
+}
+.side-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
+.side-footer { margin-top: 14px; }
+.side-tip { color: rgba(255,255,255,0.55); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(64, 158, 255, 0.9); box-shadow: 0 0 10px rgba(64, 158, 255, 0.6); }
 
-.glass-card::before {
+/* 右侧主面板 */
+.main-panel { flex: 1; min-width: 0; }
+
+/* ================== 3. KPI 卡片 ================== */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.kpi { padding: 16px; position: relative; overflow: hidden; }
+.kpi::before {
   content: "";
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  /* 锥形渐变，你可以修改颜色 #409eff 为你喜欢的颜色 */
-  background: conic-gradient(
-    transparent, 
-    #409eff, 
-    transparent 30%
-  );
-  animation: rotate-stream 3s linear infinite;
-  opacity: 0;
-  transition: opacity 0.4s;
-  z-index: 0;
+  inset: -1px;
+  background: radial-gradient(circle at 20% 10%, rgba(64,158,255,0.18), transparent 45%);
+  pointer-events: none;
 }
-.glass-card:hover::before { opacity: 1; }
-.glass-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+.kpi-top { display: flex; align-items: center; justify-content: space-between; }
+.kpi-label { color: rgba(255,255,255,0.75); font-size: 12px; letter-spacing: 1px; }
+.kpi-value { color: #fff; font-size: 34px; font-weight: 800; margin-top: 10px; }
+.kpi-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.kpi-sub { color: rgba(255,255,255,0.45); font-size: 12px; }
+.kpi-chip {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  background: rgba(255,255,255,0.06);
 }
-.poster-box, .info-box {
-  position: relative;
-  z-index: 2;
-}
-.poster-box { height: 240px; overflow: hidden; position: relative; }
-.poster-box img { width: 100%; height: 100%; object-fit: cover; }
+.kpi-chip.up { border-color: rgba(103,194,58,0.35); background: rgba(103,194,58,0.10); }
+.kpi-chip.down { border-color: rgba(245,108,108,0.35); background: rgba(245,108,108,0.10); }
+.kpi-chip.warn { border-color: rgba(230,162,60,0.35); background: rgba(230,162,60,0.10); }
+.kpi-chip.danger { border-color: rgba(245,108,108,0.35); background: rgba(245,108,108,0.10); }
 
-.badge {
-  position: absolute; top: 10px; right: 10px;
-  background: #f56c6c; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 4px;
-  z-index: 10; box-shadow: 0 2px 10px rgba(245, 108, 108, 0.4);
-}
-.info-box { padding: 12px; background: #161b22; }
-.info-box h4 { margin: 0; color: #fff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.info-box p { color: rgba(255,255,255,0.5); font-size: 11px; margin: 5px 0 12px; }
-.footer-action { display: flex; justify-content: space-between; align-items: center; }
-.score { color: #ff9900; font-weight: bold; font-size: 13px; }
+/* ================== 4. 图表区 ================== */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.chart-card { padding: 16px; }
+.chart-box { width: 100%; height: 280px; }
+.chart-box.small { height: 220px; }
 
-/* ================== 3. 退出弹窗 (补全样式) ================== */
+.mq-list { display: flex; flex-direction: column; gap: 10px; }
+.mq-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: 0.25s;
+}
+.mq-item:hover { transform: translateY(-2px); border-color: rgba(64,158,255,0.25); }
+.mq-title { display: flex; align-items: center; gap: 10px; }
+.mq-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.05);
+}
+.mq-tag.warn { border-color: rgba(230,162,60,0.35); background: rgba(230,162,60,0.10); }
+.mq-tag.error { border-color: rgba(245,108,108,0.35); background: rgba(245,108,108,0.10); }
+.mq-name { color: #fff; font-weight: 650; }
+.mq-meta { margin-top: 6px; display: flex; gap: 14px; color: rgba(255,255,255,0.45); font-size: 12px; flex-wrap: wrap; }
+.mq-right { display: flex; align-items: center; gap: 10px; }
+.empty-hint { color: rgba(255,255,255,0.55); font-size: 13px; padding: 10px 4px; }
+
+/* table dark */
+.dark-table { background: transparent; }
+:deep(.el-table) { background: transparent; }
+:deep(.el-table__inner-wrapper::before) { background: rgba(255,255,255,0.08); }
+:deep(.el-table tr) { background: transparent !important; }
+:deep(.el-table td.el-table__cell) { border-bottom: 1px solid rgba(255,255,255,0.06); }
+:deep(.el-table th.el-table__cell) { border-bottom: 1px solid rgba(255,255,255,0.08); }
+:deep(.el-table__body-wrapper) { background: transparent; }
+:deep(.el-table__body) { background: transparent; }
+
+/* 单页 */
+.single-page { padding: 18px; }
+.single-grid { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 14px; margin-top: 12px; }
+.inner-card { padding: 14px; }
+.inner-title { color: rgba(255,255,255,0.6); font-size: 12px; }
+.inner-value { color: #fff; font-size: 30px; font-weight: 800; margin-top: 10px; }
+
+/* 快捷卡 */
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.quick-card {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.quick-card p { font-size: 12px; color: rgba(255,255,255,0.55); margin: 0; }
+.quick-card h3 { margin: 8px 0 0; color: #fff; font-size: 24px; }
+.quick-card h3.good { color: rgba(103,194,58,0.9); }
+.quick-card h3.warn { color: rgba(245,108,108,0.9); }
+.mini-note { margin-top: 12px; color: rgba(255,255,255,0.45); font-size: 12px; line-height: 1.6; }
+
+/* 审核页工具条 */
+.review-actions { display: flex; gap: 10px; margin: 12px 0 14px; flex-wrap: wrap; }
+
+/* iframe 嵌入 */
+.embed-toolbar { display: flex; gap: 10px; margin-top: 12px; }
+.embed-box {
+  margin-top: 14px;
+  height: 70vh;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.25);
+}
+.embed-frame { width: 100%; height: 100%; }
+.embed-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  text-align: center;
+}
+.embed-empty-title { color: #fff; font-size: 18px; font-weight: 800; }
+.embed-empty-sub { margin-top: 12px; color: rgba(255,255,255,0.55); max-width: 720px; line-height: 1.7; }
+
+/* ================== 5. 你原来的“玻璃块/占位”样式（保留） ================== */
+.glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 0; }
+.section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: 650; }
+.admin-placeholder .empty-state { color: rgba(255,255,255,0.75); text-align: center; padding: 40px 0; }
+.admin-placeholder .empty-state span { display: inline-block; margin-top: 8px; color: rgba(255,255,255,0.5); }
+
+/* ================== 6. 退出弹窗（保留） ================== */
 .logout-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(10px); display: flex; align-items: center;
-  justify-content: center; z-index: 3000; /* 绝对最高层 */
+  justify-content: center; z-index: 3000;
 }
 .logout-glass-card {
   background: rgba(30, 35, 45, 0.9); border: 1px solid rgba(255, 255, 255, 0.15);
@@ -314,7 +1203,7 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
 .btn-confirm { background: #f56c6c; color: #fff; }
 .btn-confirm:hover { background: #ff4d4d; transform: scale(1.05); }
 
-/* ================== 4. 个人面板与侧边栏 ================== */
+/* ================== 7. 个人面板（保留） ================== */
 .profile-panel-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px); z-index: 2000; display: flex; justify-content: flex-end;
@@ -325,10 +1214,7 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
 }
 .panel-header { display: flex; justify-content: space-between; color: #fff; margin-bottom: 30px; }
 .close-icon { cursor: pointer; font-size: 20px; }
-.code-input-group {
-  display: flex;
-  gap: 12px;
-}
+.code-input-group { display: flex; gap: 12px; }
 .code-input-group .el-button {
   background: rgba(64, 158, 255, 0.1);
   border: 1px solid rgba(64, 158, 255, 0.4);
@@ -345,53 +1231,75 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
   width: 100%;
   height: 45px;
   margin-top: 30px;
-  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); /* 经典深海蓝渐变 */
+  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
   border: none;
   font-weight: bold;
   letter-spacing: 4px;
   box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
   transition: 0.4s;
 }
-
 .save-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6);
   filter: brightness(1.2);
 }
-:deep(.el-form-item) {
-  margin-bottom: 25px;
+:deep(.el-form-item) { margin-bottom: 22px !important; }
+
+.preview-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid #409eff;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
+  cursor: zoom-in;
+  transition: 0.3s;
+  overflow: hidden;
 }
+.preview-avatar :deep(img) { border-radius: 50%; }
+.preview-avatar:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(64, 158, 255, 0.8); }
+:deep(.el-image-viewer__mask) { background: rgba(0, 0, 0, 0.8) !important; backdrop-filter: blur(10px); }
 
-.glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 25px; }
-.section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
-.rank-item { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; color: #fff; font-size: 13px; }
-.rank-num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 4px; }
-.top-1 { background: #f56c6c; }
-.top-2 { background: #e6a23c; }
-.top-3 { background: #409eff; }
-.quick-status { display: flex; gap: 15px; margin-top: 20px; }
-.status-card { flex: 1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; text-align: center; }
-.status-card p { font-size: 11px; color: #aaa; margin: 0; }
-.status-card h3 { color: #fff; margin: 5px 0 0; }
-.status-card h3.warn { color: #f56c6c; }
-
-/* 动画定义 */
-@keyframes rotate-stream {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.custom-form { margin-top: 30px; padding: 0 5px; }
+:deep(.el-form-item__label) {
+  color: #70c0ff !important;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  font-size: 13px;
+  margin-bottom: 8px !important;
+  text-transform: uppercase;
 }
-@keyframes shooting { 0% { transform: translate(0,0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(400px, 400px); opacity: 0; } }
+:deep(.el-input__wrapper) {
+  background-color: rgba(10, 25, 47, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important;
+  border-radius: 8px;
+  padding: 5px 12px;
+  transition: all 0.3s ease;
+}
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
+  background-color: rgba(10, 25, 47, 0.8) !important;
+}
+:deep(.el-input__inner) { color: #ffffff !important; font-family: 'Inter', sans-serif; }
+:deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.3); }
 
-.meteor { position: absolute; top: -50px; width: 2px; height: 50px; background: linear-gradient(to bottom, #409eff, transparent); animation: shooting 3s infinite linear; opacity: 0; }
-.meteor:nth-child(1) { left: 10%; animation-delay: 0s; }
-.meteor:nth-child(2) { left: 30%; animation-delay: 1s; }
-.meteor:nth-child(3) { left: 50%; animation-delay: 2s; }
+/* ================== 8. 动画（新增一点克制的） ================== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(18px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.kpi-anim { opacity: 0; animation: fadeInUp 0.55s cubic-bezier(0.23, 1, 0.32, 1) forwards; animation-delay: calc(var(--d) * 0.07s); }
+.chart-anim { opacity: 0; animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; animation-delay: calc(var(--d) * 0.06s); }
 
 .slide-right-enter-active, .slide-right-leave-active { transition: all 0.4s ease; }
 .slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
+
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-/* ================== 完美的斜向流星 ================== */
+
+.fade-fast-enter-active, .fade-fast-leave-active { transition: opacity 0.18s ease; }
+.fade-fast-enter-from, .fade-fast-leave-to { opacity: 0; }
+
+/* ================== 9. 流星背景（保留） ================== */
 .meteor-container {
   position: fixed;
   inset: 0;
@@ -399,21 +1307,16 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
   pointer-events: none;
   z-index: 0;
 }
-
 .meteor {
   position: absolute;
-  /* 调整为长条状，宽度代表流星长度 */
-  width: 150px; 
-  height: 2px; 
-  /* 这里的旋转角度需要和下面动画的位移角度一致，35度通常视觉效果最好 */
-  transform: rotate(-35deg); 
+  width: 150px;
+  height: 2px;
+  transform: rotate(-35deg);
   background: linear-gradient(to right, rgba(64, 158, 255, 0.8), transparent);
   animation: diagonal-fly 2s infinite linear;
   opacity: 0;
   filter: drop-shadow(0 0 5px #409eff);
 }
-
-/* 随机分布流星的起始位置（主要在顶部和右侧） */
 .meteor:nth-child(1) { top: -10%; right: 10%; animation-delay: 0s; }
 .meteor:nth-child(2) { top: 10%; right: -5%; animation-delay: 1s; }
 .meteor:nth-child(3) { top: 30%; right: 20%; animation-delay: 2.5s; }
@@ -421,145 +1324,189 @@ onBeforeUnmount(() => clearInterval(countdownTimer))
 .meteor:nth-child(5) { top: 20%; right: 50%; animation-delay: 0.5s; }
 .meteor:nth-child(6) { top: 40%; right: -10%; animation-delay: 2s; }
 
-/* 斜向飞行核心动画 */
 @keyframes diagonal-fly {
-  0% {
-    /* 初始状态：在屏幕外，右上角 */
-    transform: translate(200px, -200px) rotate(-35deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 0.5;
-  }
-  100% {
-    /* 结束状态：向左下方大幅度位移 */
-    transform: translate(-120vw, 120vh) rotate(-35deg);
-    opacity: 0;
-  }
+  0% { transform: translate(200px, -200px) rotate(-35deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.5; }
+  100% { transform: translate(-120vw, 120vh) rotate(-35deg); opacity: 0; }
 }
 
-.phone {
-  font-size: 11px;
-  color: rgba(255,255,255,0.7);
-  margin-top: 4px;
+/* ================== 10. 适配 ================== */
+@media (max-width: 1200px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-2 { grid-template-columns: 1fr; }
+  .single-grid { grid-template-columns: 1fr; }
+  .side-nav { display: none; } /* 小屏直接隐藏侧栏，省得你又来问为什么挤爆了 */
 }
 
-.phone-missing {
-  color: #e6a23c;
-  cursor: pointer;
-  text-decoration: underline;
+/* ========== Reject Dialog (Glass) ========== */
+:deep(.reject-dialog) {
+  --rd-bg: rgba(12, 18, 28, 0.72);
+  --rd-bd: rgba(255, 255, 255, 0.10);
+  --rd-tx: rgba(255, 255, 255, 0.88);
+  --rd-sub: rgba(255, 255, 255, 0.55);
 }
-.clickable { cursor: pointer; }
 
-.avatar-uploader { margin-top: 12px; }
-
-.avatar-change-btn {
-  width: 100%;
-}
-.card-inner {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  background: #161b22; /* 必须和背景色一致，或使用深色 */
-  border-radius: 10px; /* 比外层稍微小一点点 */
+:deep(.reject-dialog .el-dialog) {
+  background: var(--rd-bg) !important;
+  border: 1px solid var(--rd-bd) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.55) !important;
+  backdrop-filter: blur(16px) !important;
   overflow: hidden;
+}
+
+:deep(.reject-dialog .el-dialog__header),
+:deep(.reject-dialog .el-dialog__footer) {
+  padding: 14px 16px !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+:deep(.reject-dialog .el-dialog__body) {
+  padding: 14px 16px 6px !important;
+}
+
+.reject-hd {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
-/* 让预览用的图片保持圆形并有光效 */
-.preview-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%; 
-  border: 2px solid #409eff;
-  box-shadow: 0 0 15px rgba(64, 158, 255, 0.5);
-  cursor: zoom-in;
-  transition: 0.3s;
-  overflow: hidden; /* 确保图片缩放时不会超出圆角范围 */
+.reject-title {
+  color: var(--rd-tx);
+  font-weight: 850;
+  letter-spacing: 1px;
+  font-size: 16px;
 }
-.preview-avatar :deep(img) {
-  border-radius: 50%;
-}
-
-.preview-avatar:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 25px rgba(64, 158, 255, 0.8);
+.reject-sub {
+  margin-top: 4px;
+  color: var(--rd-sub);
+  font-size: 12px;
 }
 
-/* 覆盖 Element Plus 预览层的背景（可选，为了统一你的暗黑风格） */
-:deep(.el-image-viewer__mask) {
-  background: rgba(0, 0, 0, 0.8) !important;
-  backdrop-filter: blur(10px);
+.reject-x {
+  color: rgba(255,255,255,0.65) !important;
+  border-radius: 10px;
+  padding: 6px 10px;
+  transition: 0.2s;
+}
+.reject-x:hover {
+  background: rgba(255,255,255,0.06) !important;
+  color: #fff !important;
 }
 
-.custom-form {
-  margin-top: 30px;
-  padding: 0 5px;
+.reject-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pill {
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
 }
 
-/* 标签文字优化：改为深青蓝色，带一点科技感 */
-:deep(.el-form-item__label) {
-  color: #70c0ff !important; /* 淡青蓝 */
-  font-weight: 500;
-  letter-spacing: 1.5px;
+<style scoped>
+/* 弹窗整体容器 */
+:deep(.glass-dark-dialog) {
+  background: rgba(30, 30, 35, 0.75) !important; /* 深色半透明 */
+  backdrop-filter: blur(12px); /* 毛玻璃核心 */
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1); /* 极细边框线 */
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* 标题样式 */
+:deep(.glass-dark-dialog .el-dialog__title) {
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* 关闭按钮颜色 */
+:deep(.glass-dark-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #ffffff;
+}
+
+/* 1. 弹窗本体：极致深黑透明 */
+:deep(.pure-dark-glass) {
+  background: rgba(10, 25, 47, 0.6) !important; /* 接近纯黑，保持90%不透明度 */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05); /* 极暗的边框，仅作勾勒 */
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+/* 2. 标题：改为银灰色，告别纯白 */
+:deep(.pure-dark-glass .el-dialog__title) {
+  color: #999; 
+  font-size: 16px;
+}
+
+/* 3. 关闭按钮：暗灰色 */
+:deep(.pure-dark-glass .el-dialog__close) {
+  color: #666 !important;
+}
+:deep(.pure-dark-glass .el-dialog__close:hover) {
+  color: #f56c6c !important; /* 悬浮变红 */
+}
+
+/* 4. 提示文字：深灰色 */
+.reject-hint {
+  color: #666;
   font-size: 13px;
-  margin-bottom: 8px !important;
-  text-transform: uppercase; /* 大写字母更像 UI 界面 */
+  margin-bottom: 15px;
 }
 
-/* --- 文本框重塑 --- */
-:deep(.el-input__wrapper) {
-  background-color: rgba(10, 25, 47, 0.6) !important; /* 深海蓝透明底 */
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important; /* 微弱边框 */
-  border-radius: 8px;
-  padding: 5px 12px;
-  transition: all 0.3s ease;
+/* 5. 输入框：全黑背景 */
+:deep(.dark-input .el-textarea__inner) {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid #333 !important; /* 深焦炭色边框 */
+  color: #bbb !important; /* 文字为中灰色 */
+  box-shadow: none !important;
 }
 
-/* 文本框聚焦时的呼吸光效 */
-:deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
-  background-color: rgba(10, 25, 47, 0.8) !important;
+:deep(.dark-input .el-textarea__inner:focus) {
+  border-color: #444 !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
 }
 
-/* 输入框文字颜色 */
-:deep(.el-input__inner) {
-  color: #ffffff !important;
-  font-family: 'Inter', sans-serif;
+/* 6. 字数统计：暗度调高 */
+:deep(.dark-input .el-input__count) {
+  background: transparent !important;
+  color: #444 !important;
 }
 
-/* 占位符颜色 */
-:deep(.el-input__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.3);
+/* 7. 取消按钮：深色系 */
+.btn-dark-cancel {
+  background: #222 !important;
+  border: 1px solid #333 !important;
+  color: #888 !important;
+}
+.btn-dark-cancel:hover {
+  background: #333 !important;
+  color: #aaa !important;
 }
 
-/* 定义入场动画 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px); /* 从下方20像素处开始 */
-    filter: blur(5px); /* 增加一点模糊感，更有科技味 */
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
+.btn-dark-confirm {
+  background: #842020 !important; /* 降低亮度的暗红 */
+  border: none !important;
+  color: #ccc !important;
+}
+.btn-dark-confirm:hover {
+  background: #a82525 !important;
+  color: #fff !important;
 }
 
-/* 应用于每一项 */
-.fade-in-item {
-  opacity: 0; /* 初始隐藏 */
-  animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
-  /* 使用我们在 HTML 中定义的 --delay 变量 */
-  animation-delay: calc(var(--delay) * 0.3s); 
+/* 9. 全局遮罩层（可选）：让背景更暗 */
+:deep(.el-overlay) {
+  background-color: rgba(0, 0, 0, 0.3) !important;
 }
 
-/* 强制覆盖 Element Plus 默认的 margin，确保间距美观 */
-:deep(.el-form-item) {
-  margin-bottom: 22px !important;
-}
 </style>
