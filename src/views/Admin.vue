@@ -1410,7 +1410,6 @@ onBeforeUnmount(() => {
   background: rgba(255,255,255,0.04);
 }
 
-<style scoped>
 /* 弹窗整体容器 */
 :deep(.glass-dark-dialog) {
   background: rgba(30, 30, 35, 0.75) !important; /* 深色半透明 */

@@ -714,7 +714,7 @@ const confirmLogout = () => {
 /** ========== 抢票按钮（占位） ========== */
 const handleGrab = (movie) => {
   ElMessage.info(`正在尝试${movie.inGrabPeriod ? '抢购' : '预约'}: ${movie.title}（ID: ${movie.movieId}）`)
-  // TODO: 后续这里对接 ticket 模块：/tickets/grab?movieId=...
+  // TODO: 后续这里对接 ticket 模块：/tickets/grab?movieId=... // 这里的id是String，
 }
 
 
@@ -733,14 +733,15 @@ const fetchHomeMovies = async () => {
 
     // 兜底：确保每个字段存在，避免模板爆炸
     hotMovies.value = (list || []).map((m) => ({
-      movieId: m.movieId,
-      title: m.title,
-      posterUrl: m.posterUrl,
+      movieId: String(m.movieId ?? ''), 
+      title: m.title || '',
+      posterUrl: m.posterUrl || '',
       categories: Array.isArray(m.categories) ? m.categories : [],
-      price: Number(m.price ?? 0),          // 分
+      price: (m.price === null || m.price === undefined) ? null : Number(m.price),   
       inGrabPeriod: !!m.inGrabPeriod,
-      hotScore: Number(m.hotScore ?? 0)
+      hotScore: (m.hotScore === null || m.hotScore === undefined) ? null : Number(m.hotScore) 
     }))
+
   } catch (e) {
     hotMovies.value = []
     ElMessage.error('主页电影加载失败')
@@ -752,7 +753,7 @@ const fetchHomeMovies = async () => {
 // 热度榜：取前 5，按 hotScore 倒序
 const rankData = computed(() => {
   return [...(hotMovies.value || [])]
-    .sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0))
+    .sort((a, b) => (Number(b.hotScore ?? -1)) - (Number(a.hotScore ?? -1)))
     .slice(0, 5)
     .map((m) => ({
       name: m.title,
@@ -762,7 +763,9 @@ const rankData = computed(() => {
 
 // 分转元，显示两位小数
 const formatPrice = (fen) => {
-  const n = Number(fen || 0)
+  if (fen === null || fen === undefined) return '--'
+  const n = Number(fen)
+  if (!Number.isFinite(n)) return '--'
   return (n / 100).toFixed(2)
 }
 
