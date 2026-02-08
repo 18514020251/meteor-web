@@ -35,6 +35,12 @@ const routes = [
   {
   path: '/onboarding',
   component: () => import('../views/Onboarding.vue')
+  },
+  {
+  path: '/movies/:movieId',
+  name: 'MovieDetail',
+  component: () => import('../views/MovieDetail.vue'),
+  props: true
   }
 ]
 

@@ -57,7 +57,12 @@
                   <div class="card-inner">
                     <div class="poster-box">
                       <img :src="movie.posterUrl" />
-                      <div class="badge" v-if="movie.inGrabPeriod">抢票中</div>
+                      <div
+                      class="badge"
+                      v-if="movie.saleState === 'SELLING'"
+                    >
+                      可购买
+                    </div>
                     </div>
 
                      <div class="info-box">
@@ -81,7 +86,7 @@
                           round
                           @click="handleGrab(movie)"
                         >
-                          {{ movie.inGrabPeriod ? '立即抢' : '预约' }}
+                          {{ movie.saleState ? '立即抢' : '预约' }}
                         </el-button>
                       </div>
                     </div>
@@ -337,6 +342,25 @@ const activeMsgId = ref(null)
 const selectMessage = (msg) => {
   activeMsgId.value = (activeMsgId.value === msg.id) ? null : msg.id
 }
+
+const SALE_STATE_TEXT = {
+  NOT_STARTED: '预约',
+  SELLING: '立即抢',
+  SOLD_OUT: '已售罄',
+  CLOSED: '已停售',
+  STOPPED: '已停售',
+  CANCELED: '已取消'
+}
+
+const SALE_STATE_TIP = {
+  NOT_STARTED: '未开售',
+  SELLING: '可购买',
+  SOLD_OUT: '已售罄',
+  CLOSED: '已停售',
+  STOPPED: '已停售',
+  CANCELED: '已取消'
+}
+
 
 const onMarkRead = async (msg) => {
   if (msg.readStatus === 1) {
@@ -713,8 +737,12 @@ const confirmLogout = () => {
 
 /** ========== 抢票按钮（占位） ========== */
 const handleGrab = (movie) => {
-  ElMessage.info(`正在尝试${movie.inGrabPeriod ? '抢购' : '预约'}: ${movie.title}（ID: ${movie.movieId}）`)
-  // TODO: 后续这里对接 ticket 模块：/tickets/grab?movieId=... // 这里的id是String，
+  if (!movie?.movieId) {
+    ElMessage.warning('电影ID缺失')
+    return
+  }
+
+  router.push({ name: 'MovieDetail', params: { movieId: movie.movieId } })
 }
 
 
@@ -725,24 +753,36 @@ const homeLoading = ref(false)
 const fetchHomeMovies = async () => {
   homeLoading.value = true
   try {
-    // GET /movies/home
     const res = await http.get('/movies/home')
+    console.log('[movies/home] raw res =', res)
 
-    // 兼容两种封装：1) res 是完整 {code,msg,data}  2) res 已经是 data
+    // 兼容两种封装：
+    // 1) 拦截器拆壳：res 直接是数组
+    // 2) 没拆壳：res 是 { code,msg,data }
     const list = Array.isArray(res) ? res : (res?.data ?? [])
 
-    // 兜底：确保每个字段存在，避免模板爆炸
-    hotMovies.value = (list || []).map((m) => ({
-      movieId: String(m.movieId ?? ''), 
-      title: m.title || '',
-      posterUrl: m.posterUrl || '',
-      categories: Array.isArray(m.categories) ? m.categories : [],
-      price: (m.price === null || m.price === undefined) ? null : Number(m.price),   
-      inGrabPeriod: !!m.inGrabPeriod,
-      hotScore: (m.hotScore === null || m.hotScore === undefined) ? null : Number(m.hotScore) 
-    }))
+    if (!Array.isArray(list)) {
+      console.warn('[movies/home] list is not array, got:', list)
+    }
 
+    hotMovies.value = (Array.isArray(list) ? list : []).map((m) => {
+      const saleState = String(m.saleState || '') // 注意：后端就是 saleState
+
+      return {
+        movieId: String(m.movieId ?? ''),
+        title: m.title || '',
+        posterUrl: m.posterUrl || '',
+        categories: Array.isArray(m.categories) ? m.categories : [],
+        price: (m.price === null || m.price === undefined) ? null : Number(m.price),
+        hotScore: (m.hotScore === null || m.hotScore === undefined) ? null : Number(m.hotScore),
+
+        saleState,
+        actionText: SALE_STATE_TEXT[saleState] || '查看',
+        saleStateText: SALE_STATE_TIP[saleState] || ''
+      }
+    })
   } catch (e) {
+    console.error('[movies/home] failed:', e)
     hotMovies.value = []
     ElMessage.error('主页电影加载失败')
   } finally {
@@ -843,7 +883,6 @@ const onDeleteAll = async () => {
 
     ElMessage.success(`已删除 ${affected} 条`)
 
-    // ⭐ 如果这一页删空了，自动回退分页（你的 UX 已经很高级了）
     if (inboxQuery.pageNum > 1) {
       inboxQuery.pageNum--
       await fetchInbox()

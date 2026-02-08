@@ -333,6 +333,70 @@
                   </div>
                 </div>
 
+                <div v-show="activeMenu === 'online-users'">
+                    <div class="glass-section single-page">
+                      <div class="section-title">
+                        <el-icon><UserFilled /></el-icon> 在线用户（Redis）
+                        <el-tag size="small" effect="dark" type="info" style="margin-left: 8px;">pageSize 固定 {{ onlineQuery.pageSize }}</el-tag>
+                      
+                        <div style="margin-left:auto; display:flex; gap:10px;">
+                          <el-button :icon="Refresh" circle @click="fetchOnlineUsers" :loading="onlineLoading" />
+                        </div>
+                      </div>
+                    
+                      <el-table
+                        :data="onlineList"
+                        v-loading="onlineLoading"
+                        class="dark-table"
+                        :header-cell-style="darkHeaderStyle"
+                        :row-style="darkRowStyle"
+                      >
+                        <el-table-column prop="userId" label="userId" width="120" />
+                        <el-table-column prop="role" label="role" width="120">
+                          <template #default="{ row }">
+                            <el-tag size="small" effect="plain" :type="roleTagType(row.role)">
+                              {{ (row.role || '').toUpperCase() }}
+                            </el-tag>
+                          </template>
+                        </el-table-column>
+                      
+                        <el-table-column prop="ip" label="ip" min-width="220" />
+                      
+                        <el-table-column prop="loginTime" label="loginTime" min-width="200">
+                          <template #default="{ row }">
+                            <span class="mono">{{ fmtMs(row.loginTime) }}</span>
+                          </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="120" fixed="right">
+                          <template #default="{ row }">
+                            <el-button
+                              size="small"
+                              type="danger"
+                              plain
+                              :disabled="String(row.userId) === String(userData?.userId)"
+                              @click="onKick(row)"
+                            >
+                              下线
+                            </el-button>
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    
+                      <div style="display:flex; justify-content:flex-end; margin-top: 14px;">
+                      <el-pagination
+                        class="dark-pagination"
+                        layout="prev, pager, next"
+                        :total="onlineTotal"
+                        :page-size="onlineQuery.pageSize"
+                        :current-page="onlineQuery.pageNum"
+                        @current-change="onOnlinePageChange"
+                        size="small"
+                        background
+                      />
+                      </div>
+                    </div>
+                  </div>
+
                 <!-- 审核：v-show -->
                 <div v-show="activeMenu === 'review'">
                   <div class="glass-section single-page">
@@ -575,7 +639,7 @@
 <script setup>
 import { ref, reactive, watchEffect, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
-  Monitor, SwitchButton, Warning, Close, User, Iphone, Lock,
+  Monitor, SwitchButton, Warning, Close, User, Iphone, Lock, Refresh ,
   Search, TrendCharts, Histogram, PieChart, Bell, UserFilled, DataAnalysis, Link, Document
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
@@ -595,6 +659,27 @@ const showLogoutConfirm = ref(false)
 const showProfilePanel = ref(false)
 const countdown = ref(0)
 let countdownTimer = null
+
+// ===== 在线用户（Admin）=====
+const onlineLoading = ref(false)
+const onlineList = ref([])
+const onlineTotal = ref(0)
+
+const onlineQuery = reactive({
+  pageNum: 1,
+  pageSize: 20 // 固定
+})
+
+const darkHeaderStyle = {
+  background: 'rgba(255,255,255,0.04)',
+  color: '#cfe9ff',
+  borderBottom: '1px solid rgba(255,255,255,0.08)'
+}
+
+const darkRowStyle = {
+  background: 'transparent',
+  color: '#ffffff'
+}
 
 const profileForm = reactive({ username: '', phone: '', code: '' })
 
@@ -683,7 +768,8 @@ const menus = [
   { key: 'dashboard', label: '仪表盘', icon: Monitor },
   { key: 'register', label: '注册分析', icon: TrendCharts },
   { key: 'orders', label: '订单分析', icon: Histogram },
-  { key: 'review', label: '审核中心', icon: UserFilled }
+  { key: 'review', label: '审核中心', icon: UserFilled },
+  { key: 'online-users', label: '在线用户', icon: UserFilled, badge: null }
 ]
 
 const filteredMenus = computed(() => {
@@ -691,6 +777,70 @@ const filteredMenus = computed(() => {
   const base = kw ? menus.filter(m => m.label.toLowerCase().includes(kw)) : menus
   return base.map(m => (m.key === 'review' ? { ...m, badge: kpi.value.pendingMerchants } : { ...m, badge: null }))
 })
+
+const fetchOnlineUsers = async () => {
+  onlineLoading.value = true
+  try {
+    const res = await http.get('/admin/online-user', {
+      params: { pageNum: onlineQuery.pageNum }
+    })
+
+    // 打印一下你真实拿到的结构（只看一次就行）
+    console.log('[admin/online-user] raw =', res)
+
+    // 兼容两种：
+    // A) 已去壳：res = { records, total, pageNum, pageSize }
+    // B) 未去壳：res = { code, msg, data: { records, total... } }
+    const data = res?.records ? res : (res?.data ?? res)
+
+    onlineList.value = Array.isArray(data?.records) ? data.records : []
+    onlineTotal.value = Number(data?.total || 0)
+
+  } catch (e) {
+    console.error('[admin/online-user] failed =', e)
+    onlineList.value = []
+    onlineTotal.value = 0
+    ElMessage.error('在线用户获取失败')
+  } finally {
+    onlineLoading.value = false
+  }
+}
+
+
+
+const onOnlinePageChange = async (p) => {
+  onlineQuery.pageNum = p
+  await fetchOnlineUsers()
+}
+
+// 切到菜单时自动拉一次（避免你每次手动点刷新）
+watch(
+  () => activeMenu.value,
+  async (k) => {
+    if (k === 'online-users') {
+      onlineQuery.pageNum = 1
+      await fetchOnlineUsers()
+    }
+  }
+)
+
+// role tag 的颜色（按你返回的 admin/user/merchant）
+const roleTagType = (role) => {
+  const r = String(role || '').toLowerCase()
+  if (r === 'admin') return 'danger'
+  if (r === 'merchant') return 'warning'
+  return 'info'
+}
+
+// 时间格式化：毫秒 -> yyyy-MM-dd HH:mm:ss
+const fmtMs = (ms) => {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n <= 0) return '--'
+  const d = new Date(n)
+  const pad = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 
 const handleSelectMenu = (key) => {
   if (key === 'embed-minio') {
@@ -869,6 +1019,12 @@ const confirmReject = async () => {
 }
 
 
+const onKick = (row) => {
+  // 先占位，接口没做就别真打
+  ElMessage.info(`预留：踢下线 userId=${row.userId}（接口后续实现）`)
+}
+
+
 /** ========== ECharts ========== */
 const regChartRef = ref(null)
 const orderChartRef = ref(null)
@@ -978,7 +1134,11 @@ onMounted(async () => {
   handleResize()
   window.addEventListener('resize', handleResize)
 
-  await fetchPendingMerchantApplies()
+  try {
+    await fetchPendingMerchantApplies()
+  } catch (e) {
+    // 静默兜底，避免首页崩溃
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1511,5 +1671,38 @@ onBeforeUnmount(() => {
 :deep(.el-overlay) {
   background-color: rgba(0, 0, 0, 0.3) !important;
 }
+
+/* ========== ElementPlus 深色适配 ========== */
+
+.dark-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(255,255,255,0.06);
+  --el-table-border-color: rgba(255,255,255,0.08);
+  --el-table-header-bg-color: rgba(255,255,255,0.04);
+  --el-table-header-text-color: #cfe9ff;
+  --el-table-text-color: #ffffff;
+}
+
+.dark-pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 分页按钮 */
+.dark-pagination .el-pager li,
+.dark-pagination .btn-prev,
+.dark-pagination .btn-next {
+  background: rgba(255,255,255,0.05);
+  color: #cfe9ff;
+  border-radius: 8px;
+}
+
+.dark-pagination .is-active {
+  background: #409eff !important;
+  color: #fff !important;
+}
+
 
 </style>
