@@ -103,12 +103,6 @@
 
             </el-menu>
 
-            <div class="side-footer">
-              <div class="side-tip">
-                <span class="dot"></span>
-                数据为前端模拟，后端接上再说。
-              </div>
-            </div>
           </aside>
 
           <!-- 右侧内容区 -->
@@ -291,7 +285,7 @@
                 <div v-show="activeMenu === 'register'">
                   <div class="glass-section single-page">
                     <div class="section-title">
-                      <el-icon><TrendCharts /></el-icon> 注册分析（模拟）
+                      <el-icon><TrendCharts /></el-icon> 注册分析
                     </div>
                     <div class="single-grid">
                       <div class="glass-section inner-card">
@@ -314,7 +308,7 @@
                 <div v-show="activeMenu === 'orders'">
                   <div class="glass-section single-page">
                     <div class="section-title">
-                      <el-icon><Histogram /></el-icon> 订单分析（模拟）
+                      <el-icon><Histogram /></el-icon> 订单分析
                     </div>
                     <div class="single-grid">
                       <div class="glass-section inner-card">
@@ -329,6 +323,18 @@
                         <div class="inner-title">订单量图</div>
                         <div ref="orderChartRef2" class="chart-box small"></div>
                       </div>
+                    </div>
+                    
+                    <!-- 大图表：交易额趋势，独占一行 -->
+                    <div class="glass-section-big chart-card-big" style="margin-top: 14px;">
+                      <div class="section-title">
+                        <el-icon><TrendCharts /></el-icon> 交易额趋势（{{ gmvDays }}日）
+                        <div style="margin-left:auto; display:flex; gap:8px;">
+                          <el-button size="small" plain @click="gmvDays=7; fetchGmvTrend()">7日</el-button>
+                          <el-button size="small" plain @click="gmvDays=30; fetchGmvTrend()">30日</el-button>
+                        </div>
+                      </div>
+                      <div ref="gmvChartRef" class="chart-box"></div>
                     </div>
                   </div>
                 </div>
@@ -616,7 +622,7 @@
       </div>
     </transition>
 
-    <!-- 退出确认（保持不动） -->
+    <!-- 退出确认  -->
     <transition name="fade">
       <div v-if="showLogoutConfirm" class="logout-overlay">
         <div class="logout-glass-card">
@@ -631,9 +637,6 @@
     </transition>
   </div>
 </template>
-
-
-
 
 
 <script setup>
@@ -764,6 +767,12 @@ const activeMenu = ref('dashboard')
 const menuKeyword = ref('')
 const mainPageKeys = ['dashboard', 'register', 'orders', 'review']
 
+const gmvDays = ref(7)           // 7 or 30
+const gmvSeries = ref([])        // 单位：元（用于图表展示）
+const gmvChartRef = ref(null)
+let gmvChart = null
+
+
 const menus = [
   { key: 'dashboard', label: '仪表盘', icon: Monitor },
   { key: 'register', label: '注册分析', icon: TrendCharts },
@@ -851,10 +860,10 @@ const handleSelectMenu = (key) => {
 }
 
 /** ========== 模拟数据 ========== */
-const days = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
+const days = ref([])
 const regSeries = ref([82, 96, 105, 91, 120, 112, 128])
 const orderSeries = ref([210, 260, 230, 280, 310, 295, 330])
-const successSeries = ref({ success: 318, fail: 12 })
+const successSeries = ref({ attempt: 0, success: 0 })
 
 const statusDist = ref([
   { name: 'NORMAL', value: 68 },
@@ -862,6 +871,90 @@ const statusDist = ref([
   { name: 'REJECTED', value: 7 },
   { name: 'BANNED', value: 6 }
 ])
+
+const fetchRegisterTrend7d = async () => {
+  try {
+    const res = await http.get('/op-analytics/register/trend7d')
+
+    // 兼容：res = {code,msg,data} 或 已去壳
+    const data = res?.data ?? res
+
+    if (Array.isArray(data?.dates) && Array.isArray(data?.values)) {
+      days.value = data.dates
+      regSeries.value = data.values
+      await nextTick()
+      renderAllCharts()
+      handleResize()
+    }
+  } catch (e) {
+    console.error('[op-analytics/register/trend7d] failed =', e)
+    // 失败就继续用 mock，不要影响首页可用性
+  }
+}
+
+const fetchDealOrderTrend7d = async () => {
+  try {
+    const res = await http.get('/op-analytics/register/trend7d-pay')
+    const data = unwrap(res)
+
+    if (Array.isArray(data?.dates)) days.value = data.dates
+    orderSeries.value = Array.isArray(data?.values) ? data.values.map(n => Number(n || 0)) : []
+
+    await nextTick()
+    renderAllCharts()
+    requestAnimationFrame(() => handleResize())
+
+  } catch (e) {
+    console.error('[trend7d-pay] failed=', e)
+    ElMessage.error('订单趋势获取失败')
+  }
+}
+
+const fetchPayToday = async () => {
+  try {
+    const res = await http.get('/op-analytics/register/today')
+    const data = unwrap(res)
+
+    const attempt = Number(data?.payAttemptCnt || 0)
+    const success = Number(data?.paySuccessCnt || 0)
+
+    successSeries.value = {
+      attempt,
+      success
+    }
+  } catch (e) {
+    console.error('[pay/today] failed=', e)
+    ElMessage.error('交易汇总获取失败')
+    successSeries.value = { attempt: 0, success: 0 }
+  }
+}
+
+const fetchGmvTrend = async () => {
+  try {
+    const res = await http.get('/op-analytics/register/trend', { params: { days: gmvDays.value } })
+    const data = unwrap(res)
+
+    if (Array.isArray(data?.dates)) days.value = data.dates
+
+    const cents = Array.isArray(data?.values) ? data.values : []
+    gmvSeries.value = cents.map(x => Number(x || 0) / 100)
+
+    await nextTick()
+    renderGmvChart()
+    requestAnimationFrame(() => handleResize())
+  } catch (e) {
+    console.error('[gmv/trend] failed=', e)
+    ElMessage.error('交易额趋势获取失败')
+  }
+}
+
+const renderGmvChart = () => {
+  gmvChart = safeInit(gmvChartRef, gmvChart)
+  gmvChart?.setOption(buildLineOption('交易额(元)', days.value, gmvSeries.value), true)
+  gmvChart?.resize()
+}
+
+
 
 const pendingMerchantMock = ref([])  // 先别改模板变量名，少动
 const pendingMerchantTotal = ref(0)
@@ -918,9 +1011,11 @@ const kpi = computed(() => {
   const todayOrders = orderSeries.value[orderSeries.value.length - 1]
   const avg7Orders = Math.round(orderSeries.value.reduce((a, b) => a + b, 0) / orderSeries.value.length)
 
-  const successCount = successSeries.value.success
-  const failCount = successSeries.value.fail
-  const successRate = Math.round((successCount / (successCount + failCount)) * 100)
+  const successCount = Number(successSeries.value.success || 0)
+  const attemptCount = Number(successSeries.value.attempt || 0)
+  const failCount = Math.max(0, attemptCount - successCount)
+  const successRate = attemptCount <= 0 ? 0 : Math.round((successCount / attemptCount) * 100)
+
 
   const pendingMerchants = pendingMerchantMock.value.length
   const mqPending = mqMock.value.filter(x => x.status === 'PENDING').length
@@ -1086,20 +1181,18 @@ const buildPieOption = (data) => ({
   }]
 })
 
-/** ✅ 关键：只 init 一次，不要 dispose 反复折磨 */
 const safeInit = (domRef, oldChart) => {
   if (!domRef?.value) return null
   if (oldChart) return oldChart
   return echarts.init(domRef.value)
 }
 
-/** ✅ mounted 时把所有图表都初始化并 setOption */
 const renderAllCharts = () => {
   regChart = safeInit(regChartRef, regChart)
   orderChart = safeInit(orderChartRef, orderChart)
   statusChart = safeInit(statusChartRef, statusChart)
-  regChart?.setOption(buildLineOption('注册', days, regSeries.value), true)
-  orderChart?.setOption(buildBarOption('订单', days, orderSeries.value), true)
+  regChart?.setOption(buildLineOption('注册', days.value, regSeries.value), true)
+  orderChart?.setOption(buildBarOption('订单', days.value, orderSeries.value), true)
   statusChart?.setOption(buildPieOption(statusDist.value), true)
 
   regChart2 = safeInit(regChartRef2, regChart2)
@@ -1113,10 +1206,9 @@ const renderAllCharts = () => {
 }
 
 const handleResize = () => {
-  ;[regChart, orderChart, statusChart, regChart2, orderChart2, statusChart2].forEach(c => c?.resize())
+  ;[regChart, orderChart, statusChart, regChart2, orderChart2, statusChart2, gmvChart].forEach(c => c?.resize())
 }
 
-/** ✅ 切换菜单：v-show 让容器从 display:none 变可见，必须 resize */
 watch(activeMenu, async () => {
   // ✅ 自动加载 MinIO 控制台（写死）
   if (activeMenu.value === 'embed-minio') {
@@ -1136,10 +1228,17 @@ onMounted(async () => {
 
   try {
     await fetchPendingMerchantApplies()
+    await Promise.all([
+      fetchRegisterTrend7d(),
+      fetchDealOrderTrend7d(),
+      fetchPayToday(),
+      fetchGmvTrend()
+    ])
   } catch (e) {
-    // 静默兜底，避免首页崩溃
+    // 静默兜底
   }
 })
+
 
 onBeforeUnmount(() => {
   clearInterval(countdownTimer)
@@ -1251,6 +1350,7 @@ onBeforeUnmount(() => {
 /* ================== 4. 图表区 ================== */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .chart-card { padding: 16px; }
+.chart-card-big { padding: 18px }
 .chart-box { width: 100%; height: 280px; }
 .chart-box.small { height: 220px; }
 
@@ -1341,6 +1441,7 @@ onBeforeUnmount(() => {
 
 /* ================== 5. 你原来的“玻璃块/占位”样式（保留） ================== */
 .glass-section { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 20px; margin-bottom: 0; }
+.glass-section-big { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(40px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; margin-bottom: 0; }
 .section-title { color: #fff; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: 650; }
 .admin-placeholder .empty-state { color: rgba(255,255,255,0.75); text-align: center; padding: 40px 0; }
 .admin-placeholder .empty-state span { display: inline-block; margin-top: 8px; color: rgba(255,255,255,0.5); }
