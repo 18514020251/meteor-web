@@ -198,27 +198,34 @@
                         <el-icon><Bell /></el-icon> MQ 失败 / 待补发
                       </div>
 
-                      <div class="mq-list">
-                        <div v-for="m in mqMock" :key="m.id" class="mq-item">
+                      <div class="mq-list" v-loading="mqLoading">
+                        <div v-for="m in mqList" :key="m.id" class="mq-item">
                           <div class="mq-left">
                             <div class="mq-title">
-                              <span class="mq-tag" :class="m.level">{{ m.level.toUpperCase() }}</span>
+                              <span class="mq-tag" :class="m.level">{{ (m.resendState || 'WAIT').toUpperCase() }}</span>
                               <span class="mq-name">{{ m.name }}</span>
                             </div>
                             <div class="mq-meta">
-                              <span>routingKey: {{ m.routingKey }}</span>
-                              <span>msgId: {{ m.msgId }}</span>
+                              <span>sourceModule: <b class="mono">{{ m.sourceModule || '-' }}</b></span>
+                              <span>routingKey: <b class="mono">{{ m.routingKey || '-' }}</b></span>
+                              <span>msgId: <b class="mono">{{ m.msgId || '-' }}</b></span>
                             </div>
                           </div>
                           <div class="mq-right">
-                            <el-tag size="small" :type="m.status === 'PENDING' ? 'warning' : 'danger'">
-                              {{ m.status }}
-                            </el-tag>
-                            <el-button size="small" type="primary" plain @click="mockResend(m)">补发</el-button>
+                            <el-button
+                              size="small"
+                              type="primary"
+                              plain
+                              :loading="m.__resending"
+                              :disabled="m.__resending || m.resendState === 'DOING' || m.resendState === 'SUCCESS'"
+                              @click="resendOne(m)"
+                            >
+                              补发
+                            </el-button>
                           </div>
                         </div>
-
-                        <div v-if="mqMock.length === 0" class="empty-hint">暂无失败消息，奇迹发生了。</div>
+                      
+                        <div v-if="!mqLoading && mqList.length === 0" class="empty-hint">既然没有需要补发的MQ  奇迹发生了</div>
                       </div>
                     </div>
                   </div>
@@ -274,9 +281,6 @@
                         </div>
                       </div>
 
-                      <div class="mini-note">
-                        这里以后可以塞你想要的“在线用户数 / 热门接口 / 慢查询榜”，折磨自己挺在行的。
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -411,9 +415,15 @@
                     </div>
 
                     <div class="review-actions">
-                      <el-button type="primary" plain @click="mockRefresh">刷新</el-button>
-                      <el-button type="warning" plain @click="mockBatchResend">批量补发 MQ</el-button>
-                      <el-button type="danger" plain @click="mockClearMq">清空 MQ 列表</el-button>
+                      <el-button
+                        type="warning"
+                        plain
+                        :loading="resendAllLoading"
+                        :disabled="resendAllLoading"
+                        @click="resendAll"
+                      >
+                        一键补发 MQ
+                      </el-button>
                     </div>
 
                     <div class="grid-2">
@@ -428,26 +438,34 @@
                         <div class="section-title">
                           <el-icon><Bell /></el-icon> MQ 失败 / 待补发
                         </div>
-                        <div class="mq-list">
-                          <div v-for="m in mqMock" :key="m.id" class="mq-item">
+                        <div class="mq-list" v-loading="mqLoading">
+                          <div v-for="m in mqList" :key="m.id" class="mq-item">
                             <div class="mq-left">
                               <div class="mq-title">
-                                <span class="mq-tag" :class="m.level">{{ m.level.toUpperCase() }}</span>
+                                <span class="mq-tag" :class="m.level">{{ (m.resendState || 'WAIT').toUpperCase() }}</span>
                                 <span class="mq-name">{{ m.name }}</span>
                               </div>
-                              <div class="mq-meta">
-                                <span>routingKey: {{ m.routingKey }}</span>
-                                <span>msgId: {{ m.msgId }}</span>
-                              </div>
+                                <div class="mq-meta">
+                                  <span>sourceModule: <b class="mono">{{ m.sourceModule || '-' }}</b></span>
+                                  <span>routingKey: <b class="mono">{{ m.routingKey || '-' }}</b></span>
+                                  <span>msgId: <b class="mono">{{ m.msgId || '-' }}</b></span>
+                                </div>
                             </div>
                             <div class="mq-right">
-                              <el-tag size="small" :type="m.status === 'PENDING' ? 'warning' : 'danger'">
-                                {{ m.status }}
-                              </el-tag>
-                              <el-button size="small" type="primary" plain @click="mockResend(m)">补发</el-button>
+                              <el-button
+                                size="small"
+                                type="primary"
+                                plain
+                                :loading="m.__resending"
+                                :disabled="m.__resending || m.resendState === 'DOING' || m.resendState === 'SUCCESS'"
+                                @click="resendOne(m)"
+                              >
+                                补发
+                              </el-button>
                             </div>
                           </div>
-                          <div v-if="mqMock.length === 0" class="empty-hint">居然没有需要补发的消息</div>
+                        
+                          <div v-if="!mqLoading && mqList.length === 0" class="empty-hint">既然没有需要补发的MQ  奇迹发生了</div>
                         </div>
                       </div>
                     </div>
@@ -503,9 +521,6 @@
                       />
                       <div v-else class="embed-empty">
                         <div class="embed-empty-title">还没加载 URL</div>
-                        <div class="embed-empty-sub">
-                          你以后要嵌 Nacos / RabbitMQ / MinIO 控制台，就把地址填这里。然后再去处理跨域、鉴权、cookie、iframe 限制这些快乐问题。
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -679,6 +694,8 @@ const darkHeaderStyle = {
   borderBottom: '1px solid rgba(255,255,255,0.08)'
 }
 
+const resendAllLoading = ref(false)
+
 const darkRowStyle = {
   background: 'transparent',
   color: '#ffffff'
@@ -761,6 +778,42 @@ const confirmLogout = () => {
   router.push('/login')
   showLogoutConfirm.value = false
 }
+
+const resendAll = async () => {
+  if (resendAllLoading.value) return
+  resendAllLoading.value = true
+
+  try {
+    const res = await http.post('/op-analytics/mqfail/resend/all')
+    const data = unwrap(res)                 // 兼容你项目的 unwrap
+    const payload = data?.data ?? data        // 兼容后端包了一层 data 的情况
+
+    const ok = payload?.requestId && (data?.code === 200 || payload?.success != null)
+    if (!ok) {
+      ElMessage.error(data?.msg || '一键补发失败')
+      return
+    }
+
+    // 你返回示例字段
+    const total = Number(payload.totalCandidates ?? 0)
+    const locked = Number(payload.locked ?? 0)
+    const success = Number(payload.success ?? 0)
+    const failed = Number(payload.failed ?? 0)
+
+    ElMessage.success(
+      `已触发一键补发：total=${total}, locked=${locked}, success=${success}, failed=${failed}`
+    )
+
+    // 走流程：拉一次最新 pending 列表
+    await fetchMqPending()
+  } catch (e) {
+    console.error('[mqfail/resend/all] failed=', e)
+    ElMessage.error('一键补发失败（网络或后端异常）')
+  } finally {
+    resendAllLoading.value = false
+  }
+}
+
 
 /** ========== 左侧菜单与页面状态 ========== */
 const activeMenu = ref('dashboard')
@@ -999,11 +1052,8 @@ const fetchPendingMerchantApplies = async () => {
 
 
 
-const mqMock = ref([
-  { id: 1, level: 'warn', name: 'merchant.reviewed', routingKey: 'merchant.apply.reviewed', msgId: 'evt:2755478653', status: 'PENDING' },
-  { id: 2, level: 'error', name: 'order.created', routingKey: 'order.created', msgId: 'evt:2755479101', status: 'FAILED' },
-  { id: 3, level: 'warn', name: 'user.password.changed', routingKey: 'user.password.changed', msgId: 'evt:2755480002', status: 'PENDING' }
-])
+const mqLoading = ref(false)
+const mqList = ref([]) 
 
 const kpi = computed(() => {
   const todayRegister = regSeries.value[regSeries.value.length - 1]
@@ -1018,8 +1068,13 @@ const kpi = computed(() => {
 
 
   const pendingMerchants = pendingMerchantMock.value.length
-  const mqPending = mqMock.value.filter(x => x.status === 'PENDING').length
-  const mqFail = mqMock.value.filter(x => x.status === 'FAILED').length
+  const mqPending = mqList.value.filter(
+    x => x.resendState === 'WAIT' || x.resendState === 'DOING'
+  ).length
+
+  const mqFail = mqList.value.filter(
+    x => x.resendState === 'FAILED'
+  ).length
 
   return { todayRegister, avg7Register, todayOrders, avg7Orders, successCount, failCount, successRate, pendingMerchants, mqPending, mqFail }
 })
@@ -1049,12 +1104,82 @@ const resetEmbedUrl = () => {
   embedUrlApplied.value = ''
 }
 
+const fetchMqPending = async () => {
+  mqLoading.value = true
+  try {
+    const res = await http.get('/op-analytics/mqfail/fail-msg/pending')
+    const data = unwrap(res) // 你已有 unwrap：res?.data?.data ?? res?.data ?? res
+
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+    mqList.value = arr.map(x => ({
+      id: x.id,
+      msgId: x.msgId,
+      routingKey: x.routingKey,
+      exchangeName: x.exchangeName,
+      topic: x.topic,
+      sourceModule: x.sourceModule,
+      bizId: x.bizId,
+      resendState: x.resendState,     // WAIT/FAILED/DOING/SUCCESS
+      lastError: x.lastError,
+      resendLastError: x.resendLastError,
+      resendAttemptCnt: x.resendAttemptCnt,
+      // 给 UI 用的字段（保持你原来那套渲染不大改）
+      name: x.topic || x.routingKey,
+      status: x.resendState,          // 直接显示 resendState
+      level: (x.resendState === 'FAILED') ? 'error' : 'warn'
+    }))
+  } catch (e) {
+    console.error('[mqfail/pending] failed=', e)
+    mqList.value = []
+    ElMessage.error('MQ 待补发列表获取失败')
+  } finally {
+    mqLoading.value = false
+  }
+}
+
 /** ========== 模拟交互 ========== */
 const mockResend = (m) => { ElMessage.success(`已触发补发：${m.name}`); m.status = 'PENDING' }
 const mockReject = (row) => { ElMessage.warning(`已拒绝：${row.shopName}`); pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== row.applyId) }
 const mockRefresh = () => ElMessage.success('已刷新（假的）')
-const mockBatchResend = () => ElMessage.success('批量补发已触发（假的，但你会实现真的）')
-const mockClearMq = () => { mqMock.value = []; ElMessage.success('已清空 MQ 列表') }
+const mockClearMq = () => { 
+  mqList.value = []
+  ElMessage.success('已清空 MQ 列表')
+}
+
+const resendOne = async (m) => {
+  const id = m?.id
+  if (!id) return ElMessage.warning('消息 id 不存在')
+
+  // 防抖：避免重复点
+  if (m.__resending) return
+  m.__resending = true
+
+  try {
+    // ✅ 你的接口：POST /op-analytics/mqfail/resend/{id}
+    const res = await http.post(`/op-analytics/mqfail/resend/${id}`)
+
+    // 兼容你项目的 unwrap（你前面定义过）
+    const data = unwrap(res)
+
+    // 后端返回示例：{ code, msg, data: { success, error, ... } }
+    const ok = data?.success === true || data?.data?.success === true
+    const payload = data?.data ?? data
+
+    if (ok) {
+      ElMessage.success(`补发已触发：id=${payload?.id ?? id}`)
+      m.resendState = 'DOING'
+      await fetchMqPending()
+    } else {
+      const errMsg = payload?.error || data?.msg || '补发失败'
+      ElMessage.error(errMsg)
+    }
+  } catch (e) {
+    console.error('[mqfail/resend] failed=', e)
+    ElMessage.error('补发失败（网络或后端异常）')
+  } finally {
+    m.__resending = false
+  }
+}
 
 const approveApply = async (row) => {
   const applyId = row?.applyId
@@ -1234,6 +1359,7 @@ onMounted(async () => {
       fetchPayToday(),
       fetchGmvTrend()
     ])
+    await fetchMqPending()
   } catch (e) {
     // 静默兜底
   }
@@ -1803,6 +1929,10 @@ onBeforeUnmount(() => {
 .dark-pagination .is-active {
   background: #409eff !important;
   color: #fff !important;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.2px;
 }
 
 
