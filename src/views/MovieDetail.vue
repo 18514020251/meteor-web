@@ -89,6 +89,7 @@
                 class="buy-btn"
                 :type="s.saleState === 'SELLING' ? 'primary' : 'info'"
                 :disabled="s.saleState !== 'SELLING'"
+                :loading="buyingId === String(s.screeningId)"
                 round
                 @click="onBuy(s)"
               >
@@ -105,6 +106,7 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { TicketingAPI } from '@/api/ticketing'
 import { ElMessage } from 'element-plus'
 // 导入美化版需要的图标
 import { ArrowLeft, Refresh, Calendar, Loading } from '@element-plus/icons-vue'
@@ -354,9 +356,38 @@ const stateText = (s) => {
   return map[s] || s
 }
 
-const onBuy = (s) => {
-  ElMessage.success(`进入抢购：screeningId=${s.screeningId}`)
-  // TODO：后面接 precheck + 下单
+const buyingId = ref(null)
+
+const onBuy = async (s) => {
+  if (!s?.screeningId) return
+  if (s.saleState !== 'SELLING') return
+
+  if (buyingId.value) return
+  buyingId.value = String(s.screeningId)
+
+  try {
+    const res = await TicketingAPI.grabOrder(s.screeningId)
+
+    if (res?.code === 0) {
+      ElMessage.success(res.msg || '下单成功')
+      router.push({
+        name: 'Order',
+        query: {
+          orderNo: res.orderNo,
+          screeningId: String(s.screeningId),
+          leftStock: String(res.leftStock ?? ''),
+          movieId: movieId
+        }
+      })
+    } else {
+      ElMessage.error(res?.msg || '下单失败')
+      refreshOneScreening(s.screeningId)
+    }
+  } catch (e) {
+    refreshOneScreening(s.screeningId)
+  } finally {
+    buyingId.value = null
+  }
 }
 
 onMounted(async () => {
