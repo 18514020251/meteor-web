@@ -22,6 +22,8 @@
                 </span>
             </div>
 
+            <el-button link class="nav-icon-btn" :icon="Search" @click="handleSearchClick"></el-button>
+            
             <el-badge
               :value="unreadCount"
               :max="99"
@@ -48,12 +50,24 @@
         <el-row :gutter="25">
           <el-col :md="17">
             <div class="glass-section">
-              <div class="section-title">
-                <el-icon><VideoCamera /></el-icon> 正在热映 / 实时抢购
+              <div class="section-title section-title-row">
+                <div class="title-left">
+                  <el-icon><VideoCamera /></el-icon>
+                  <span>正在热映 / 实时抢购</span>
+                </div>
+              
+                <div class="title-right">
+                  <el-segmented
+                    v-model="movieTab"
+                    :options="movieTabOptions"
+                    size="small"
+                  />
+                </div>
               </div>
+
               
               <div class="movie-grid">
-                <div v-for="movie in hotMovies" :key="movie.movieId" class="glass-card">
+                <div v-for="movie in movieList" :key="movie.movieId" class="glass-card">
                   <div class="card-inner">
                     <div class="poster-box">
                       <img :src="movie.posterUrl" />
@@ -237,6 +251,93 @@
   </div>
 </el-drawer>
 
+<el-drawer
+  v-model="showSetting"
+  direction="rtl"
+  size="480px"
+  :with-header="false"
+  class="setting-drawer"
+>
+  <div class="setting-panel">
+    <div class="setting-header">
+      <div class="title">
+        <el-icon><Setting /></el-icon>
+        <span>账户设置</span>
+      </div>
+      <el-button link class="icon-glass-btn close" @click="showSetting = false">
+        <el-icon><Close /></el-icon>
+      </el-button>
+    </div>
+
+    <div class="setting-body">
+
+      <!-- 修改密码 -->
+      <div class="setting-card">
+        <h4>修改密码</h4>
+
+        <el-form label-position="top" class="custom-form">
+          <el-form-item label="旧密码" class="fade-in-item" style="--delay: 1">
+            <el-input
+              v-model="passwordForm.oldPassword"
+              type="password"
+              show-password
+              placeholder="请输入旧密码"
+            />
+          </el-form-item>
+
+          <el-form-item label="新密码" class="fade-in-item" style="--delay: 2">
+            <el-input
+              v-model="passwordForm.newPassword"
+              type="password"
+              show-password
+              placeholder="请输入新密码"
+            />
+          </el-form-item>
+
+          <el-form-item label="确认新密码" class="fade-in-item" style="--delay: 3">
+            <el-input
+              v-model="passwordForm.confirmPassword"
+              type="password"
+              show-password
+              placeholder="请再次输入新密码"
+            />
+          </el-form-item>
+
+          <el-button
+            type="primary"
+            :loading="passwordSubmitting"
+            @click="handleChangePassword"
+            class="save-btn fade-in-item"
+            style="--delay: 4"
+          >
+            保存新密码
+          </el-button>
+        </el-form>
+      </div>
+
+      <!-- 注销账号 -->
+      <div class="setting-card danger">
+        <h4>注销账号</h4>
+        <p class="danger-tip">
+          注销后账号数据不可恢复，请谨慎操作。
+        </p>
+
+        <el-button
+          type="danger"
+          plain
+          :loading="deleteSubmitting"
+          @click="handleDeleteAccount"
+          class="delete-account-btn fade-in-item"
+          style="--delay: 5"
+        >
+          申请注销账号
+        </el-button>
+      </div>
+
+    </div>
+  </div>
+</el-drawer>
+
     </div>
 
     <transition name="slide-right">
@@ -312,11 +413,11 @@
 <script setup>
 import { ref, reactive, computed, watchEffect, onBeforeUnmount, onMounted, watch } from 'vue'
 
-import { VideoCamera, DataLine, SwitchButton, Warning, Close, Message, Setting, Refresh } from '@element-plus/icons-vue'
+import { VideoCamera, DataLine, SwitchButton, Warning, Close, Message, Setting, Refresh, Search } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage,ElMessageBox  } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import http from '../request/http'
 
@@ -326,10 +427,118 @@ const inboxList = ref([])
 const inboxTotal = ref(0)
 
 const inboxQuery = reactive({
-  readStatus: null, // null=全部；0=未读；1=已读（按你后端枚举）
+  readStatus: null, 
   pageNum: 1,
   pageSize: 12
 })
+
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+const passwordSubmitting = ref(false)
+
+const resetPasswordForm = () => {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+}
+
+const showSetting = ref(false)
+
+watch(showSetting, (v) => {
+  if (!v) resetPasswordForm()
+})
+
+
+const handleSettingClick = () => {
+  showSetting.value = true
+}
+
+const handleSearchClick = () => {
+  router.push('/search')
+}
+
+const handleChangePassword = async () => {
+  const oldPassword = String(passwordForm.oldPassword || '').trim()
+  const newPassword = String(passwordForm.newPassword || '').trim()
+  const confirmPassword = String(passwordForm.confirmPassword || '').trim()
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    ElMessage.warning('请填写完整密码信息')
+    return
+  }
+  if (newPassword.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+
+  // 可选：二次确认更安全
+  try {
+    await ElMessageBox.confirm('确认修改密码？修改后需要重新登录。', '提示', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  passwordSubmitting.value = true
+  try {
+    // ✅ 按你给的接口/入参
+    await http.put('/user/update-password', {
+      oldPassword,
+      newPassword,
+      confirmPassword
+    })
+
+    ElMessage.success('密码修改成功，请重新登录')
+    showSetting.value = false
+
+    // 强制退出重新登录
+    authStore.logout()
+    router.push('/login')
+  } finally {
+    passwordSubmitting.value = false
+  }
+}
+const deleteSubmitting = ref(false)
+const handleDeleteAccount = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确认注销账号？此操作不可恢复',
+      '危险操作',
+      {
+        confirmButtonText: '确认注销',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'danger-dark-box',
+        distinguishCancelAndClose: true
+      }
+    )
+  } catch {
+    return
+  }
+
+  deleteSubmitting.value = true
+  try {
+    await http.delete('/user/delete')
+
+    ElMessage.success('账号已注销')
+
+    authStore.logout()
+    router.push('/login')
+  } catch (e) {
+  } finally {
+    deleteSubmitting.value = false
+  }
+}
 
 const readStatusOptions = [
   { label: '全部', value: null },
@@ -747,8 +956,57 @@ const handleGrab = (movie) => {
 
 
 // ====== 主页电影数据 ======
-const hotMovies = ref([])
+const hotMovies = ref([])      
+const latestMovies = ref([])   
+
 const homeLoading = ref(false)
+const latestLoading = ref(false)
+
+const movieTab = ref('hot')
+const movieTabOptions = [
+  { label: '热映', value: 'hot' },
+  { label: '最新', value: 'latest' }
+]
+
+const movieList = computed(() => {
+  return movieTab.value === 'latest' ? (latestMovies.value || []) : (hotMovies.value || [])
+})
+
+const fetchLatestMovies = async () => {
+  latestLoading.value = true
+  try {
+    const res = await http.get('/movies/latest')
+
+    // 兼容两种封装：res 是数组 or { code,msg,data }
+    const list = Array.isArray(res) ? res : (res?.data ?? [])
+
+    latestMovies.value = (Array.isArray(list) ? list : []).map((m) => {
+      const saleState = String(m.saleState || '')
+      return {
+        movieId: String(m.movieId ?? ''),
+        title: m.title || '',
+        posterUrl: m.posterUrl || '',
+        categories: Array.isArray(m.categories) ? m.categories : [],
+        price: (m.price === null || m.price === undefined) ? null : Number(m.price),
+        hotScore: (m.hotScore === null || m.hotScore === undefined) ? null : Number(m.hotScore),
+
+        saleState,
+        actionText: SALE_STATE_TEXT[saleState] || '查看',
+        saleStateText: SALE_STATE_TIP[saleState] || ''
+      }
+    })
+  } catch (e) {
+    latestMovies.value = []
+    ElMessage.error('最新电影加载失败')
+  } finally {
+    latestLoading.value = false
+  }
+}
+watch(movieTab, async (v) => {
+  if (v === 'latest' && latestMovies.value.length === 0) {
+    await fetchLatestMovies()
+  }
+})
 
 const fetchHomeMovies = async () => {
   homeLoading.value = true
@@ -756,9 +1014,6 @@ const fetchHomeMovies = async () => {
     const res = await http.get('/movies/home')
     console.log('[movies/home] raw res =', res)
 
-    // 兼容两种封装：
-    // 1) 拦截器拆壳：res 直接是数组
-    // 2) 没拆壳：res 是 { code,msg,data }
     const list = Array.isArray(res) ? res : (res?.data ?? [])
 
     if (!Array.isArray(list)) {
@@ -1177,7 +1432,7 @@ const onDeleteAll = async () => {
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 :deep(.el-overlay) {
-  transition-duration: 2s !important;
+  transition-duration: 0.3s !important;
 }
 
 .inbox-panel {
@@ -1511,7 +1766,158 @@ const onDeleteAll = async () => {
   box-shadow: none;
 }
 
-/* ================== 8. 动画 & 流星背景 ================== */
+/* ================== 8. 设置抽屉样式 ================== */
+.setting-drawer {
+  background: transparent !important;
+  transition-duration: 0.6s !important;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.setting-drawer :deep(.el-drawer__body) {
+  padding: 0 !important;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.setting-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(18, 24, 34, 0.96), rgba(10, 13, 18, 0.94));
+  border-left: 1px solid rgba(64, 158, 255, 0.22);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+
+.setting-panel::before {
+  content: "";
+  position: absolute;
+  top: -120px; right: -120px;
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, rgba(64,158,255,0.18), transparent 65%);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.setting-header {
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+  background: rgba(10, 13, 18, 0.55);
+}
+
+.setting-header .title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.setting-body {
+  flex: 1;
+  padding: 24px 20px;
+  overflow: auto;
+}
+
+.setting-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.setting-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border: 2px solid rgba(0,0,0,0);
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+.setting-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(64,158,255,0.18);
+}
+
+.setting-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.setting-card::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle, rgba(64,158,255,0.10), transparent 60%);
+  opacity: 0;
+  transform: translate(20%, -10%);
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.setting-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 14px 26px rgba(0,0,0,0.35);
+}
+
+.setting-card:hover::after {
+  opacity: 1;
+}
+
+.setting-card h4 {
+  color: #fff;
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 1px;
+}
+
+.setting-card.danger {
+  border-color: rgba(245, 108, 108, 0.2);
+  background: rgba(245, 108, 108, 0.03);
+}
+
+.setting-card.danger:hover {
+  background: rgba(245, 108, 108, 0.05);
+}
+
+.setting-card.danger::after {
+  background: radial-gradient(circle, rgba(245,108,108,0.15), transparent 60%);
+}
+
+.danger-tip {
+  color: rgba(245, 108, 108, 0.8);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.delete-account-btn {
+  width: 100%;
+  height: 45px;
+  border-radius: 8px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+}
+
+.delete-account-btn:hover {
+  box-shadow: 0 0 15px rgba(245, 108, 108, 0.4);
+  transform: translateY(-2px);
+}
+
+/* ================== 9. 动画 & 流星背景 ================== */
 .slide-right-enter-active, .slide-right-leave-active { transition: all 0.4s ease; }
 .slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
@@ -1687,5 +2093,64 @@ const onDeleteAll = async () => {
   font-weight: 400;
   font-size: 12px;
 }
+
+/* ====== 注销账号暗色危险卡片 ====== */
+.setting-card.danger {
+  background: rgba(20, 10, 10, 0.55);
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  box-shadow: 0 0 18px rgba(255, 60, 60, 0.12);
+  backdrop-filter: blur(14px);
+  border-radius: 18px;
+  padding: 18px;
+  transition: all 0.25s ease;
+}
+
+.setting-card.danger:hover {
+  border-color: rgba(255, 80, 80, 0.5);
+  box-shadow: 0 0 28px rgba(255, 60, 60, 0.25);
+  transform: translateY(-2px);
+}
+
+.setting-card.danger h4 {
+  color: rgba(255, 120, 120, 0.95);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+.setting-card.danger .danger-tip {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 14px;
+}
+
+/* ====== 暗色危险按钮 ====== */
+.delete-account-btn {
+  width: 100%;
+  height: 42px;
+  border-radius: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  background: rgba(255, 60, 60, 0.12) !important;
+  border: 1px solid rgba(255, 60, 60, 0.4) !important;
+  color: rgba(255, 140, 140, 0.95) !important;
+  transition: all 0.25s ease;
+}
+
+.delete-account-btn:hover {
+  background: rgba(255, 60, 60, 0.22) !important;
+  border-color: rgba(255, 80, 80, 0.75) !important;
+  color: #fff !important;
+  box-shadow: 0 0 18px rgba(255, 60, 60, 0.35);
+  transform: translateY(-1px);
+}
+
+.delete-account-btn:active {
+  transform: scale(0.98);
+}
+
+
 
 </style>

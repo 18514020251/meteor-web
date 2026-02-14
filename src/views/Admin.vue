@@ -346,9 +346,7 @@
                 <div v-show="activeMenu === 'online-users'">
                     <div class="glass-section single-page">
                       <div class="section-title">
-                        <el-icon><UserFilled /></el-icon> 在线用户（Redis）
-                        <el-tag size="small" effect="dark" type="info" style="margin-left: 8px;">pageSize 固定 {{ onlineQuery.pageSize }}</el-tag>
-                      
+                        <el-icon><UserFilled /></el-icon> 在线用户
                         <div style="margin-left:auto; display:flex; gap:10px;">
                           <el-button :icon="Refresh" circle @click="fetchOnlineUsers" :loading="onlineLoading" />
                         </div>
@@ -804,8 +802,8 @@ const resendAll = async () => {
       `已触发一键补发：total=${total}, locked=${locked}, success=${success}, failed=${failed}`
     )
 
-    // 走流程：拉一次最新 pending 列表
     await fetchMqPending()
+    await fetchResendStateStats()
   } catch (e) {
     console.error('[mqfail/resend/all] failed=', e)
     ElMessage.error('一键补发失败（网络或后端异常）')
@@ -850,9 +848,6 @@ const fetchOnlineUsers = async () => {
     // 打印一下你真实拿到的结构（只看一次就行）
     console.log('[admin/online-user] raw =', res)
 
-    // 兼容两种：
-    // A) 已去壳：res = { records, total, pageNum, pageSize }
-    // B) 未去壳：res = { code, msg, data: { records, total... } }
     const data = res?.records ? res : (res?.data ?? res)
 
     onlineList.value = Array.isArray(data?.records) ? data.records : []
@@ -918,18 +913,12 @@ const regSeries = ref([82, 96, 105, 91, 120, 112, 128])
 const orderSeries = ref([210, 260, 230, 280, 310, 295, 330])
 const successSeries = ref({ attempt: 0, success: 0 })
 
-const statusDist = ref([
-  { name: 'NORMAL', value: 68 },
-  { name: 'PENDING', value: 19 },
-  { name: 'REJECTED', value: 7 },
-  { name: 'BANNED', value: 6 }
-])
+const statusDist = ref([]) 
 
 const fetchRegisterTrend7d = async () => {
   try {
     const res = await http.get('/op-analytics/register/trend7d')
 
-    // 兼容：res = {code,msg,data} 或 已去壳
     const data = res?.data ?? res
 
     if (Array.isArray(data?.dates) && Array.isArray(data?.values)) {
@@ -941,7 +930,6 @@ const fetchRegisterTrend7d = async () => {
     }
   } catch (e) {
     console.error('[op-analytics/register/trend7d] failed =', e)
-    // 失败就继续用 mock，不要影响首页可用性
   }
 }
 
@@ -1104,6 +1092,31 @@ const resetEmbedUrl = () => {
   embedUrlApplied.value = ''
 }
 
+const fetchResendStateStats = async () => {
+  try {
+    const res = await http.get('/op-analytics/register/resend-state-stats')
+
+    const root = res?.data ?? res
+    const arr = Array.isArray(root?.data) ? root.data : (Array.isArray(root) ? root : [])
+
+    const SHOW_ZERO = false
+
+    const list = (SHOW_ZERO ? arr : arr.filter(x => Number(x?.count || 0) > 0))
+      .map(x => ({
+        name: x.resendStateDesc || `STATE_${x.resendState}`,
+        value: Number(x.count || 0)
+      }))
+
+    statusDist.value = list
+
+    await nextTick()
+    renderAllCharts()
+    requestAnimationFrame(() => handleResize())
+  } catch (e) {
+    console.error('[resend-state-stats] failed=', e)
+  }
+}
+
 const fetchMqPending = async () => {
   mqLoading.value = true
   try {
@@ -1137,15 +1150,6 @@ const fetchMqPending = async () => {
   }
 }
 
-/** ========== 模拟交互 ========== */
-const mockResend = (m) => { ElMessage.success(`已触发补发：${m.name}`); m.status = 'PENDING' }
-const mockReject = (row) => { ElMessage.warning(`已拒绝：${row.shopName}`); pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== row.applyId) }
-const mockRefresh = () => ElMessage.success('已刷新（假的）')
-const mockClearMq = () => { 
-  mqList.value = []
-  ElMessage.success('已清空 MQ 列表')
-}
-
 const resendOne = async (m) => {
   const id = m?.id
   if (!id) return ElMessage.warning('消息 id 不存在')
@@ -1155,13 +1159,10 @@ const resendOne = async (m) => {
   m.__resending = true
 
   try {
-    // ✅ 你的接口：POST /op-analytics/mqfail/resend/{id}
     const res = await http.post(`/op-analytics/mqfail/resend/${id}`)
 
-    // 兼容你项目的 unwrap（你前面定义过）
     const data = unwrap(res)
 
-    // 后端返回示例：{ code, msg, data: { success, error, ... } }
     const ok = data?.success === true || data?.data?.success === true
     const payload = data?.data ?? data
 
@@ -1169,6 +1170,7 @@ const resendOne = async (m) => {
       ElMessage.success(`补发已触发：id=${payload?.id ?? id}`)
       m.resendState = 'DOING'
       await fetchMqPending()
+      await fetchResendStateStats()
     } else {
       const errMsg = payload?.error || data?.msg || '补发失败'
       ElMessage.error(errMsg)
@@ -1189,7 +1191,6 @@ const approveApply = async (row) => {
     await http.post(`/admin/merchant-apply/${applyId}/approve`)
     ElMessage.success(`已通过：${row.shopName || applyId}`)
 
-    // ✅ 方式A：本地移除（最快）
     pendingMerchantMock.value = pendingMerchantMock.value.filter(x => x.applyId !== applyId)
 
     pendingMerchantTotal.value = Math.max(0, (pendingMerchantTotal.value || 0) - 1)
@@ -1239,10 +1240,25 @@ const confirmReject = async () => {
 }
 
 
-const onKick = (row) => {
-  // 先占位，接口没做就别真打
-  ElMessage.info(`预留：踢下线 userId=${row.userId}（接口后续实现）`)
-}
+const onKick = async (row) => {
+  const { userId } = row; 
+  if (!userId) {
+    ElMessage.warning('用户ID不存在');
+    return;
+  }
+
+  try {
+    await http.post('/admin/online-user/kick', { userId: userId }); 
+
+    ElMessage.success(`已成功踢出用户：${userId}`);
+
+    // 操作成功，刷新在线用户列表
+    await fetchOnlineUsers();
+  } catch (error) {
+    console.error('踢人失败:', error);
+    ElMessage.error(attemptToExtractErrorMessage(error, '踢出用户失败，请重试'));
+  }
+};
 
 
 /** ========== ECharts ========== */
@@ -1321,7 +1337,7 @@ const renderAllCharts = () => {
   statusChart?.setOption(buildPieOption(statusDist.value), true)
 
   regChart2 = safeInit(regChartRef2, regChart2)
-  regChart2?.setOption(buildLineOption('注册', days, regSeries.value), true)
+  regChart2?.setOption(buildLineOption('注册', days.value, regSeries.value), true)
 
   orderChart2 = safeInit(orderChartRef2, orderChart2)
   orderChart2?.setOption(buildBarOption('订单', days, orderSeries.value), true)
@@ -1357,7 +1373,8 @@ onMounted(async () => {
       fetchRegisterTrend7d(),
       fetchDealOrderTrend7d(),
       fetchPayToday(),
-      fetchGmvTrend()
+      fetchGmvTrend(),
+      fetchResendStateStats()
     ])
     await fetchMqPending()
   } catch (e) {

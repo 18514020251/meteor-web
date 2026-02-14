@@ -194,7 +194,6 @@ const fetchScreenings = async () => {
   }
 }
 
-// 只刷新单条：通过“重新拉列表”拿到新数据，然后只替换目标那一条
 const refreshOneScreening = async (screeningId) => {
   if (!screeningId) return
   if (refreshingMap[screeningId]) return

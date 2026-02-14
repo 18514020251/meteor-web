@@ -145,6 +145,47 @@ html, body {
   width: 100%;
 }
 
+.danger-dark-box.el-message-box {
+  background: #141826 !important;
+  border: 1px solid rgba(255, 80, 80, 0.35) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 0 40px rgba(255, 60, 60, 0.25) !important;
+}
+
+/* 标题 */
+.danger-dark-box .el-message-box__title {
+  color: #ffb3b3 !important;
+}
+
+/* 内容 */
+.danger-dark-box .el-message-box__content {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* 底部按钮区域 */
+.danger-dark-box .el-message-box__btns {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 取消按钮 */
+.danger-dark-box .el-button:not(.el-button--primary) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* 确认按钮 */
+.danger-dark-box .el-button--primary {
+  background: rgba(255, 60, 60, 0.15) !important;
+  border: 1px solid rgba(255, 60, 60, 0.6) !important;
+  color: #ff9d9d !important;
+}
+
+.danger-dark-box .el-button--primary:hover {
+  background: rgba(255, 60, 60, 0.3) !important;
+  box-shadow: 0 0 18px rgba(255, 60, 60, 0.4);
+}
+
 /* --- 重塑 Message 提醒框 --- */
 .el-message {
   background: rgba(13, 25, 48, 0.85) !important;
