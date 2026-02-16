@@ -37,26 +37,38 @@ service.interceptors.response.use(
   response => {
     const res = response.data
     
-    // 按后端统一返回结构处理
     if (res.code === 200) {
       return res.data
     } else {
-      ElMessage.error(res.msg || '请求失败')
-      return Promise.reject(new Error(res.msg || '请求失败'))
+      if (res.code === 409) {
+        ElMessage.error('请求过快稍后再试')
+      } else {
+        ElMessage.error(res.msg || '请求过快稍后再试')
+      }
+      return Promise.reject(new Error(res.msg || '请求过快稍后再试'))
     }
   },
   error => {
-    // 处理 401 状态
-    if (error.response && error.response.status === 401) {
-      const authStore = useAuthStore()
-      authStore.logout()
-      router.push('/login')
-      ElMessage.error('登录已过期，请重新登录')
+    if (error.response) {
+      const { status } = error.response
+      
+      switch (status) {
+        case 401:
+          const authStore = useAuthStore()
+          authStore.logout()
+          router.push('/login')
+          ElMessage.error('登录已过期，请重新登录')
+          break
+        case 409:
+          ElMessage.error('请求过快稍后再试')
+          break
+        default:
+          ElMessage.error(error.response.data?.msg || `请求过快稍后再试`)
+      }
     } else {
       ElMessage.error(error.message || '网络错误')
     }
     return Promise.reject(error)
   }
 )
-
 export default service

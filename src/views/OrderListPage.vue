@@ -7,7 +7,7 @@
         </el-button>
         <div class="nav-title">订单列表</div>
         <div class="nav-right">
-          <el-button text @click="clearMock">清空</el-button>
+          <el-button text @click="clearMock">刷新</el-button>
         </div>
       </div>
 
@@ -33,7 +33,7 @@
         </div>
 
         <div v-if="filtered.length === 0" class="empty">
-          <el-empty description="暂无订单（目前是原型页）" :image-size="90" />
+          <el-empty description="暂无订单" :image-size="90" />
           <el-button type="primary" @click="goBackToMovie" round>去选场次</el-button>
         </div>
 
@@ -46,11 +46,9 @@
                   <span class="v mono">{{ o.orderNo }}</span>
                 </div>
                 <div class="sub">
-                  <span class="muted">场次ID：</span>
-                  <span class="mono">{{ o.screeningId || '-' }}</span>
                   <span class="dot">·</span>
                   <span class="muted">下单：</span>
-                  <span>{{ o.createdAt }}</span>
+                  <span>{{ o.createTime }}</span>
                 </div>
               </div>
 
@@ -61,133 +59,158 @@
               </div>
             </div>
 
-            <div class="row mid">
-              <div class="hint" v-if="o.leftStock !== null && o.leftStock !== undefined">
-                <el-icon class="hint-icon"><InfoFilled /></el-icon>
-                当前余票：<b>{{ o.leftStock }}</b>
-              </div>
-              <div class="hint muted" v-else>
-                <el-icon class="hint-icon"><InfoFilled /></el-icon>
-                余票未知（后续对接接口）
-              </div>
-            </div>
-
             <div class="row actions">
-              <el-button size="small" @click="openDetail(o)">详情(占位)</el-button>
+              <el-button size="small" @click="openDetail(o)">详情</el-button>
               <el-button size="small" text @click="copy(o.orderNo)">复制订单号</el-button>
+            
               <el-button
+                v-if="canDelete(o.status)"
                 size="small"
-                type="primary"
+                type="danger"
                 plain
-                @click="buyAgain(o)"
+                @click="doDelete(o)"
               >
-                再来一单
+                删除
               </el-button>
             </div>
+
           </div>
         </div>
-
-        <div class="footer-tip">
-          <el-icon><Warning /></el-icon>
-          说明：你后端目前只有“抢票受理”，这里是订单列表原型。后续接入接口后可显示支付状态/座位/影院等。
-        </div>
+        <el-pagination
+          v-if="total > 0"
+          class="pager"
+          background
+          layout="prev, pager, next, sizes, total"
+          :total="total"
+          v-model:current-page="page"
+          v-model:page-size="size"
+          :page-sizes="[10, 20, 50]"
+          @current-change="fetchList"
+          @size-change="fetchList"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getOrderList, deleteOrder } from '@/api/order'
 import { ArrowLeft, Search, InfoFilled, Warning } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 
-/**
- * ===== 原型数据结构 =====
- * status: PROCESSING | SUCCESS | FAILED
- */
-const STORAGE_KEY = 'meteor_mock_orders_v1'
-
-const loadLocal = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    const arr = raw ? JSON.parse(raw) : []
-    return Array.isArray(arr) ? arr : []
-  } catch {
-    return []
-  }
-}
-
-const saveLocal = (arr) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr))
-}
-
-const orders = ref(loadLocal())
-
+// ====== UI 状态 ======
 const activeTab = ref('ALL')
 const keyword = ref('')
 
+// ====== 分页 ======
+const page = ref(1)
+const size = ref(10)
+const total = ref(0)
+
+// ====== 后端数据 ======
+const loading = ref(false)
+const orders = ref([]) 
+
+// tab -> 后端 status 枚举映射
+const tabToStatus = (tab) => {
+  if (tab === 'PROCESSING') return 'WAIT_PAY'
+  if (tab === 'SUCCESS') return 'PAID'
+  if (tab === 'FAILED') return 'CLOSED_TIMEOUT' // 你没做取消，先按超时关闭当失败
+  return undefined // ALL 不传
+}
+
+const clearMock = () => {
+  keyword.value = ''
+  activeTab.value = 'ALL'
+  page.value = 1
+  fetchList()
+}
+
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const status = tabToStatus(activeTab.value)
+    const data = await getOrderList({
+      page: page.value,
+      size: size.value,
+      status
+    })
+
+    orders.value = (data.records || []).map(x => ({
+      orderNo: x.orderNo,
+      status: x.status,                 
+      payAmount: x.payAmount,
+      expireTime: x.expireTime,
+      createTime: x.createTime,
+
+      screeningId: null,
+      movieId: null,
+      leftStock: null
+    }))
+
+    total.value = data.total || 0
+    size.value = data.size || size.value
+    page.value = data.current || page.value
+  } catch (e) {
+  } finally {
+    loading.value = false
+  }
+}
+
+const canDelete = (status) => ['CLOSED_TIMEOUT', 'CANCELED', 'REFUNDED'].includes(status)
+
+const doDelete = async (o) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除该订单？\n订单号：${o.orderNo}`,
+      '提示',
+      { type: 'warning' }
+    )
+    await deleteOrder(o.orderNo)
+    ElMessage.success('已删除')
+    if (orders.value.length === 1 && page.value > 1) page.value -= 1
+    await fetchList()
+  } catch (e) {
+  }
+}
+
+const filtered = computed(() => {
+  const kw = keyword.value.trim()
+  if (!kw) return orders.value
+  return orders.value.filter(o => String(o.orderNo).includes(kw))
+})
+
+// 状态展示：用后端枚举
 const statusText = (s) => {
   const map = {
-    PROCESSING: '处理中',
-    SUCCESS: '成功',
-    FAILED: '失败'
+    WAIT_PAY: '待支付',
+    PAID: '已支付',
+    CANCELED: '已取消',
+    CLOSED_TIMEOUT: '超时关闭',
+    REFUNDING: '退款中',
+    REFUNDED: '已退款'
   }
   return map[s] || s || '未知'
 }
 
 const statusTagType = (s) => {
-  if (s === 'SUCCESS') return 'success'
-  if (s === 'FAILED') return 'danger'
-  if (s === 'PROCESSING') return 'warning'
+  if (s === 'PAID') return 'success'
+  if (s === 'WAIT_PAY') return 'warning'
+  if (s === 'CLOSED_TIMEOUT' || s === 'CANCELED') return 'info'
+  if (s === 'REFUNDING') return 'warning'
+  if (s === 'REFUNDED') return 'success'
   return ''
 }
 
-const filtered = computed(() => {
-  const kw = keyword.value.trim()
-  return orders.value
-    .filter(o => {
-      if (activeTab.value === 'ALL') return true
-      return o.status === activeTab.value
-    })
-    .filter(o => {
-      if (!kw) return true
-      return String(o.orderNo).includes(kw) || String(o.screeningId || '').includes(kw)
-    })
-})
-
-// 从下单成功页带来的参数：插入一条“最新订单”
-const tryInsertFromQuery = () => {
-  const orderNo = String(route.query.orderNo || '')
-  if (!orderNo) return
-
-  const screeningId = String(route.query.screeningId || '')
-  const movieId = String(route.query.movieId || '')
-  const leftStockRaw = route.query.leftStock
-  const leftStock = Number.isFinite(Number(leftStockRaw)) ? Number(leftStockRaw) : null
-
-  // 防重复插入（刷新页面时）
-  const exists = orders.value.some(o => String(o.orderNo) === orderNo)
-  if (exists) return
-
-  const createdAt = new Date().toLocaleString()
-
-  const item = {
-    orderNo,
-    screeningId: screeningId || null,
-    movieId: movieId || null,
-    leftStock,
-    status: 'PROCESSING', // 原型：默认处理中（因为你后端只是“受理成功”）
-    createdAt
-  }
-
-  orders.value = [item, ...orders.value]
-  saveLocal(orders.value)
-
-  // 可选：把 query 清掉，避免用户刷新又带着 query（这里不强制）
+// 金额分 -> 元（可选）
+const fenToYuan = (fen) => {
+  if (fen === null || fen === undefined) return '-'
+  return (fen / 100).toFixed(2)
 }
 
 const copy = async (text) => {
@@ -199,43 +222,32 @@ const copy = async (text) => {
   }
 }
 
+// 详情：跳你的详情页（你后端已有 GET /order?orderNo=）
 const openDetail = (o) => {
-  ElMessage.info(`详情页待开发：orderNo=${o.orderNo}`)
+  router.push({ path: '/order-detail', query: { orderNo: o.orderNo } })
 }
 
-// “再来一单”：返回对应电影详情页（继续选场次）
-const buyAgain = (o) => {
-  if (o.movieId) {
-    router.push(`/movies/${o.movieId}`)
-    return
-  }
-  ElMessage.info('缺少 movieId（后续可以在订单详情接口补）')
-}
+const goBackToMovie = () => router.back()
 
-const goBackToMovie = () => {
-  // 没有 movieId 时就回上一页
-  const movieId = String(route.query.movieId || '')
-  if (movieId) router.push(`/movies/${movieId}`)
-  else router.back()
-}
-
-const clearMock = () => {
-  orders.value = []
-  saveLocal([])
-  ElMessage.success('已清空（原型数据）')
-}
+// tab / 分页变化时拉取
+watch(activeTab, () => { page.value = 1; fetchList() })
+watch(size, () => { page.value = 1; fetchList() })
 
 onMounted(() => {
-  tryInsertFromQuery()
+  fetchList()
 })
 </script>
 
 <style scoped>
 .page-container {
   min-height: 100vh;
+  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+  overflow-y: auto;
 }
 .detail-wrap {
   padding: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 .nav-bar {
   display: flex;
@@ -259,6 +271,7 @@ onMounted(() => {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 .toolbar {
   display: flex;
@@ -285,6 +298,13 @@ onMounted(() => {
   padding: 12px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+.order-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 .row {
   display: flex;
@@ -344,6 +364,11 @@ onMounted(() => {
 .hint-icon {
   opacity: 0.85;
 }
+.pager {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
 .footer-tip {
   margin-top: 14px;
   padding: 10px 12px;
@@ -354,5 +379,135 @@ onMounted(() => {
   gap: 8px;
   align-items: center;
   font-size: 12px;
+}
+
+/* Element Plus 暗色主题样式覆盖 */
+:deep(.el-input__wrapper) {
+  background-color: rgba(10, 25, 47, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.2) inset !important;
+  border-radius: 8px;
+  padding: 5px 12px;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset, 0 0 12px rgba(64, 158, 255, 0.4) !important;
+  background-color: rgba(10, 25, 47, 0.8) !important;
+}
+
+:deep(.el-input__inner) {
+  color: #ffffff !important;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+:deep(.el-radio-button__inner) {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background-color: rgba(64, 158, 255, 0.2);
+  border-color: rgba(64, 158, 255, 0.4);
+  color: #409eff;
+  box-shadow: -1px 0 0 0 rgba(64, 158, 255, 0.4);
+}
+
+:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner):focus {
+  box-shadow: -1px 0 0 0 rgba(64, 158, 255, 0.4), 0 0 0 1px rgba(64, 158, 255, 0.2) inset;
+}
+
+:deep(.el-pagination.is-background .el-pager li) {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  color: rgba(255,255,255,0.75) !important;
+  border-radius: 10px !important;
+}
+
+:deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: rgba(64,158,255,0.18) !important;
+  border-color: rgba(64,158,255,0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 0 12px rgba(64,158,255,0.22);
+}
+
+:deep(.el-pagination.is-background .btn-prev),
+:deep(.el-pagination.is-background .btn-next) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 10px !important;
+}
+
+:deep(.el-pagination.is-background .btn-prev:hover),
+:deep(.el-pagination.is-background .btn-next:hover) {
+  background: rgba(64, 158, 255, 0.18) !important;
+  border-color: rgba(64, 158, 255, 0.35) !important;
+  color: #fff !important;
+  box-shadow: 0 0 12px rgba(64, 158, 255, 0.35);
+}
+
+:deep(.el-pagination.is-background .btn-prev:disabled),
+:deep(.el-pagination.is-background .btn-next:disabled) {
+  background: rgba(255, 255, 255, 0.03) !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+:deep(.el-button) {
+  border-radius: 8px;
+}
+
+:deep(.el-button--primary) {
+  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+  border: none;
+  font-weight: bold;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
+  transition: all 0.3s ease;
+}
+
+:deep(.el-button--primary:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6);
+  filter: brightness(1.2);
+}
+
+:deep(.el-button--text) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+:deep(.el-button--text:hover) {
+  color: #409eff;
+}
+
+:deep(.el-empty__description) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+:deep(.el-tag) {
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+:deep(.el-tag--success) {
+  background-color: rgba(103, 194, 58, 0.2);
+  border-color: rgba(103, 194, 58, 0.3);
+  color: #67c23a;
+}
+
+:deep(.el-tag--warning) {
+  background-color: rgba(230, 162, 60, 0.2);
+  border-color: rgba(230, 162, 60, 0.3);
+  color: #e6a23c;
+}
+
+:deep(.el-tag--info) {
+  background-color: rgba(144, 147, 153, 0.2);
+  border-color: rgba(144, 147, 153, 0.3);
+  color: #909399;
 }
 </style>

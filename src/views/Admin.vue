@@ -100,6 +100,26 @@
                 <span>MinIO 控制台</span>
               </div>
             </a>
+            <a
+              :href="JAEGER_CONSOLE_URL"
+              target="_blank"
+              class="side-menu-link"
+            >
+              <div class="el-menu-item">
+                <el-icon><Link /></el-icon>
+                <span>Jaeger 控制台</span>
+              </div>
+            </a>
+            <a
+              :href="SONAR_CONSOLE_URL"
+              target="_blank"
+              class="side-menu-link"
+            >
+              <div class="el-menu-item">
+                <el-icon><Link /></el-icon>
+                <span>SonarQube 控制台</span>
+              </div>
+            </a>
 
             </el-menu>
 
@@ -1071,6 +1091,8 @@ const kpi = computed(() => {
 const MINIO_CONSOLE_URL = 'http://localhost:9001/browser'
 const NACOS_CONSOLE_URL = 'http://localhost:8848/nacos'
 const MQ_CONSOLE_URL = 'http://localhost:15672/'
+const JAEGER_CONSOLE_URL = 'http://localhost:16686'
+const SONAR_CONSOLE_URL = 'http://localhost:9003'
 const embedUrl = ref('')
 const embedUrlApplied = ref('')
 const embedTitle = computed(() => {
@@ -1351,7 +1373,6 @@ const handleResize = () => {
 }
 
 watch(activeMenu, async () => {
-  // ✅ 自动加载 MinIO 控制台（写死）
   if (activeMenu.value === 'embed-minio') {
     embedUrl.value = MINIO_CONSOLE_URL
     embedUrlApplied.value = MINIO_CONSOLE_URL

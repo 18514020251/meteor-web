@@ -24,6 +24,8 @@
 
             <el-button link class="nav-icon-btn" :icon="Search" @click="handleSearchClick"></el-button>
             
+            <el-button link class="nav-icon-btn" :icon="Tickets" @click="handleOrderClick"></el-button>
+            
             <el-badge
               :value="unreadCount"
               :max="99"
@@ -119,10 +121,6 @@
                   <span class="rank-name">{{ item.name }}</span>
                   <span class="rank-hot">{{ item.hot }}℃</span>
                 </div>
-              </div>
-              <div class="quick-status">
-                <div class="status-card"><p>我的抢票</p><h3>02</h3></div>
-                <div class="status-card"><p>待付款</p><h3 class="warn">01</h3></div>
               </div>
             </div>
           </el-col>
@@ -413,7 +411,7 @@
 <script setup>
 import { ref, reactive, computed, watchEffect, onBeforeUnmount, onMounted, watch } from 'vue'
 
-import { VideoCamera, DataLine, SwitchButton, Warning, Close, Message, Setting, Refresh, Search } from '@element-plus/icons-vue'
+import { VideoCamera, DataLine, SwitchButton, Warning, Close, Message, Setting, Refresh, Search, Tickets } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -458,6 +456,10 @@ const handleSettingClick = () => {
 
 const handleSearchClick = () => {
   router.push('/search')
+}
+
+const handleOrderClick = () => {
+  router.push('/orders')
 }
 
 const handleChangePassword = async () => {

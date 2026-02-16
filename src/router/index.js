@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import component from 'element-plus/es/components/tree-select/src/tree-select-option.mjs'
 
 const routes = [
   {
@@ -56,7 +57,21 @@ const routes = [
   path: '/orders',
   name: 'OrderList',
   component: () => import('@/views/OrderListPage.vue')
-}
+  },
+  {
+  path: '/order-detail',
+  name: 'OrderDetail',
+  component: () => import('@/views/OrderDetail.vue')
+  },
+  {
+    path: '/order/pay',
+    name: 'OrderPay',
+    component: () => import('@/views/OrderPay.vue')
+  },
+  {
+  path: '/pay-sim',
+  component: () => import('@/views/PaySim.vue')
+  }
 ]
 
 const router = createRouter({
@@ -64,17 +79,19 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   const token = authStore.token
-  
-  // 访问非登录页面且无token，跳转到登录页
-  if (to.path !== '/login' && !token) {
-    next('/login')
-  } else {
-    next()
+
+  const WHITE_LIST = ['/login', '/', '/loading', '/pay-sim']
+
+  if (WHITE_LIST.includes(to.path)) return next()
+
+  if (!token) {
+    return next({ path: '/login', query: { redirect: to.fullPath } })
   }
+
+  next()
 })
 
 export default router

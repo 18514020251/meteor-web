@@ -35,7 +35,13 @@
             </div>
 
             <div class="btn-row">
-              <el-button type="primary" @click="goOrderList">去订单列表</el-button>
+              <el-button 
+                type="primary" 
+                @click="goOrderList"
+                :disabled="isOrderBtnDisabled"
+              >
+                {{ isOrderBtnDisabled ? `去订单列表 (${countdown}s)` : '去订单列表' }}
+              </el-button>
               <el-button @click="goBackToMovie">返回继续选场次</el-button>
             </div>
           </template>
@@ -46,7 +52,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, CircleCheck } from '@element-plus/icons-vue'
@@ -59,6 +65,11 @@ const screeningId = String(route.query.screeningId || '')
 const leftStock = route.query.leftStock
 
 const movieId = String(route.query.movieId || '')
+
+// 添加3秒锁定功能
+const isOrderBtnDisabled = ref(true)
+const countdown = ref(3)
+let countdownTimer = null
 
 const leftStockText = computed(() => {
   const n = Number(leftStock)
@@ -87,11 +98,33 @@ const goOrderList = () => {
   })
 }
 
-
 const goBackToMovie = () => {
   if (movieId) router.push(`/movies/${movieId}`)
   else router.back()
 }
+
+// 启动倒计时
+const startCountdown = () => {
+  countdownTimer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      isOrderBtnDisabled.value = false
+    }
+  }, 1000)
+}
+
+onMounted(() => {
+  startCountdown()
+})
+
+onBeforeUnmount(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+})
 </script>
 
 <style scoped>

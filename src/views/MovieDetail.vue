@@ -129,21 +129,16 @@ const loadingScreenings = ref(false)
  * ===== 倒计时 & 临界刷新相关状态 =====
  */
 
-// 记录每个场次的“本地倒计时秒数”（显示用）
-// 注意：不直接修改后端原始 remainSeconds，避免替换数据时冲突
-const remainMap = reactive({}) // { [screeningId]: number }
-const refreshingMap = reactive({}) // { [screeningId]: boolean }
+const remainMap = reactive({}) 
+const refreshingMap = reactive({}) 
 
-// 记录“某条场次的下一次刷新时间点(本地时间戳ms)”，避免疯狂刷
-const nextRefreshAt = reactive({}) // { [screeningId]: number }
+const nextRefreshAt = reactive({}) 
 
-// 记录“到点后仍 NOT_STARTED 的兜底刷新次数”，避免到点后无限刷
-const afterZeroTries = reactive({}) // { [screeningId]: number }
+const afterZeroTries = reactive({}) 
 
 const remainByStartTime = (s) => {
   const t = Date.parse(s.saleStartTime)
   if (!Number.isFinite(t)) return null
-  // ✅ 用 nowTick.value 触发依赖更新
   return clampNonNeg(Math.ceil((t - nowTick.value) / 1000))
 }
 
@@ -167,7 +162,6 @@ const normalizeScreening = (s) => {
   return { ...s, saleState }
 }
 
-// 拉场次列表（全量），并初始化 remainMap
 const fetchScreenings = async () => {
   loadingScreenings.value = true
   try {
@@ -175,11 +169,9 @@ const fetchScreenings = async () => {
     const list = (Array.isArray(res) ? res : (res?.data ?? [])).map(normalizeScreening)
     screenings.value = list
 
-    // 初始化/同步本地倒计时（只对 NOT_STARTED 有意义）
     for (const s of list) {
       const id = s.screeningId
       if (!id) continue
-      // 若本地没值，初始化；若后端刷新后 remainSeconds 更大/更小，也同步
       if (s.saleState  === 'NOT_STARTED') {
         remainMap[id] = clampNonNeg(Number(s.remainSeconds ?? 0))
       } else {
@@ -190,7 +182,6 @@ const fetchScreenings = async () => {
     }
   } catch (e) {
     screenings.value = []
-    ElMessage.error('场次加载失败')
   } finally {
     loadingScreenings.value = false
   }

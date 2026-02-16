@@ -19,6 +19,7 @@
 </template>
 
 <script setup>
+document.documentElement.classList.add('dark')
 import { onMounted, watch, ref } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useRoute, useRouter } from 'vue-router'
@@ -81,6 +82,10 @@ onMounted(() => {
 .el-button.is-link:hover {
   background: rgba(255,255,255,0.06) !important;
   color: #7fd4ff !important;
+}
+:root.dark {
+  --el-bg-color: transparent; /* 让 Element 组件背景透明 */
+  --el-text-color-primary: rgba(255, 255, 255, 0.9);
 }
 
 /* 普通按钮 hover */
