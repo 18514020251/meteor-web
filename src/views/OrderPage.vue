@@ -66,9 +66,9 @@ const leftStock = route.query.leftStock
 
 const movieId = String(route.query.movieId || '')
 
-// 添加3秒锁定功能
+// 添加5秒锁定功能
 const isOrderBtnDisabled = ref(true)
-const countdown = ref(3)
+const countdown = ref(5)
 let countdownTimer = null
 
 const leftStockText = computed(() => {

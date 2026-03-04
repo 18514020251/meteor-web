@@ -75,8 +75,6 @@
           <div class="qr-sub">
             有效期至：{{ payData?.expireTime || '-' }}
           </div>
-          <el-link :href="debugQrUrl" target="_blank">在新标签打开模拟扫码页</el-link>
-
           <div class="qr-tip">
             扫码后会打开“模拟支付页”，输入密码：<b>123456</b>
           </div>
@@ -155,14 +153,19 @@ const handlePay = async () => {
     const user = await getUserInfo()
     const uid = user.userId
 
-    const origin = import.meta.env.VITE_PUBLIC_ORIGIN || location.origin
-    const qrUrl =
-      `${origin}/pay-sim` +
-      `?payNo=${encodeURIComponent(res.payNo)}` +
-      `&orderNo=${encodeURIComponent(orderInfo.value.orderNo)}` +
-      `&channel=${encodeURIComponent(res.channel)}` +
-      `&uid=${encodeURIComponent(uid)}`
-
+    const origin = import.meta.env.VITE_PUBLIC_ORIGIN || window.location.origin
+      
+    const href = router.resolve({
+      path: '/pay-sim',
+      query: {
+        payNo: res.payNo,
+        orderNo: orderInfo.value.orderNo,
+        channel: res.channel,
+        uid
+      }
+    }).href
+    
+    const qrUrl = origin + href
     const debugQrUrl = ref('')
     debugQrUrl.value = qrUrl
     console.log(qrUrl)
@@ -170,6 +173,7 @@ const handlePay = async () => {
     qrVisible.value = true
     await nextTick()
     await QRCode.toCanvas(qrCanvasRef.value, qrUrl, { width: 220 })
+    startPolling()
 
 
   } finally {

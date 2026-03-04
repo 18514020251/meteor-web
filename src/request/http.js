@@ -34,21 +34,20 @@ service.interceptors.request.use(
 
 // 响应拦截器
 service.interceptors.response.use(
-  response => {
-    const res = response.data
-    
-    if (res.code === 200) {
-      return res.data
-    } else {
-      if (res.code === 409) {
-        ElMessage.error('请求过快稍后再试')
-      } else {
-        ElMessage.error(res.msg || '请求过快稍后再试')
-      }
-      return Promise.reject(new Error(res.msg || '请求过快稍后再试'))
+  (response) => {
+    if (response.config?.responseType === 'blob' || response.config?.responseType === 'arraybuffer') {
+      return response
     }
+
+    const res = response.data
+    if (res?.code === 200) return res.data
+
+    if (res?.code === 409) ElMessage.error('请求过快稍后再试')
+    else ElMessage.error(res?.msg || '系统异常')
+
+    return Promise.reject(new Error(res?.msg || '系统异常'))
   },
-  error => {
+  (error) => {
     if (error.response) {
       const { status } = error.response
       

@@ -184,10 +184,8 @@
               </div>
             </div>
 
-            <!-- 页面容器：不再 out-in 销毁 DOM，只做淡入 -->
             <transition name="fade-fast">
               <div class="page-wrap">
-                <!-- Dashboard：v-show 保留 DOM -->
                 <div v-show="activeMenu === 'dashboard'">
                   <div class="grid-2">
                     <div class="glass-section chart-card chart-anim" style="--d: 0">
@@ -348,6 +346,33 @@
                         <div ref="orderChartRef2" class="chart-box small"></div>
                       </div>
                     </div>
+
+                    <div class="glass-section chart-card" style="--d: 4; margin-top: 14px;">
+                    <div class="section-title">
+                        <el-icon><Document /></el-icon>
+                        导出订单操作日志（按天）
+                        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                          <el-date-picker
+                            v-model="exportDate"
+                            type="date"
+                            value-format="YYYY-MM-DD"
+                            placeholder="选择日期"
+                            :clearable="true"
+                            :editable="false"
+                            :disabled-date="d => d.getTime() > Date.now()"
+                            style="width: 160px;"
+                          />
+                          <el-button type="primary" plain :loading="exportLoading" @click="exportOrderLogs">
+                            导出
+                          </el-button>
+                          <el-button plain @click="setExportToday">今天</el-button>
+                        </div>
+                      </div>
+                      <div class="hint small" style="opacity:.8;margin-top:6px;">
+                        当天 00:00:00 含，次日 00:00:00 不含；无数据也会导出仅表头的 Excel
+                      </div>
+                    </div>
+
                     
                     <!-- 大图表：交易额趋势，独占一行 -->
                     <div class="glass-section-big chart-card-big" style="margin-top: 14px;">
@@ -718,6 +743,86 @@ const darkRowStyle = {
   background: 'transparent',
   color: '#ffffff'
 }
+
+// ===== 订单操作日志导出 =====
+const exportDate = ref('')
+const exportLoading = ref(false)
+
+// 今天快捷设置
+const setExportToday = () => {
+  const d = new Date()
+  const pad = (x) => String(x).padStart(2, '0')
+  exportDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+}
+
+const parseFilenameFromCD = (cd) => {
+  if (!cd) return null
+  try {
+    // 兼容 filename*=UTF-8''xxx 和 filename="xxx"
+    const mStar = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(cd)
+    if (mStar && mStar[1]) {
+      return decodeURIComponent(mStar[1].replace(/(^"|"$)/g, ''))
+    }
+    const m = /filename="?([^"]+)"?/i.exec(cd)
+    if (m && m[1]) return decodeURIComponent(m[1])
+  } catch {}
+  return null
+}
+
+const exportOrderLogs = async () => {
+  const d = String(exportDate.value || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    ElMessage.warning('请选择导出日期')
+    return
+  }
+
+  exportLoading.value = true
+  try {
+    const resp = await http.get('/order/order-logs/export', {
+      params: { date: d },
+      responseType: 'blob'
+    })
+
+    const ct = (resp?.headers?.['content-type'] || '').toLowerCase()
+    const blob = resp.data
+
+    // 如果后端返回的是 JSON 错误（401/403/500），这里能兜住
+    if (ct.includes('application/json')) {
+      const text = await blob.text()
+      try {
+        const obj = JSON.parse(text)
+        ElMessage.error(obj?.msg || obj?.message || '导出失败（鉴权或后端异常）')
+      } catch {
+        ElMessage.error(text || '导出失败（鉴权或后端异常）')
+      }
+      return
+    }
+
+    let filename = `订单操作日志_${d}.xlsx`
+    const cd = resp?.headers?.['content-disposition']
+    const parsed = parseFilenameFromCD(cd)
+    if (parsed) filename = parsed
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+
+    ElMessage.success('下载已开始')
+  } catch (e) {
+    console.error('[export] failed:', e)
+    ElMessage.error('导出失败，请重试')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+
+
 
 const profileForm = reactive({ username: '', phone: '', code: '' })
 
@@ -1362,7 +1467,8 @@ const renderAllCharts = () => {
   regChart2?.setOption(buildLineOption('注册', days.value, regSeries.value), true)
 
   orderChart2 = safeInit(orderChartRef2, orderChart2)
-  orderChart2?.setOption(buildBarOption('订单', days, orderSeries.value), true)
+  orderChart2?.setOption(buildBarOption('订单', days.value, orderSeries.value), true)
+
 
   statusChart2 = safeInit(statusChartRef2, statusChart2)
   statusChart2?.setOption(buildPieOption(statusDist.value), true)

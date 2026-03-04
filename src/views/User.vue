@@ -111,8 +111,8 @@
               </div>
             </div>
           </el-col>
-
-          <el-col :md="7">
+          <!-- // todo: 后续实现热度功能实现 -->
+          <!-- <el-col :md="7">
             <div class="glass-section side-bar">
               <div class="section-title"><el-icon><DataLine /></el-icon> 实时热度榜</div>
               <div class="rank-list">
@@ -123,7 +123,7 @@
                 </div>
               </div>
             </div>
-          </el-col>
+          </el-col> -->
         </el-row>
       </main>
       <el-drawer

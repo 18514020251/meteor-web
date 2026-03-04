@@ -79,44 +79,6 @@
             </div>
           </div>
 
-          <div class="card" v-if="detail.item">
-            <div class="section-title">订单项</div>
-
-            <div class="row">
-              <div class="k">场次ID</div>
-              <div class="v mono">{{ detail.item.screeningId }}</div>
-            </div>
-            <div class="row">
-              <div class="k">电影ID</div>
-              <div class="v mono">{{ detail.item.movieId }}</div>
-            </div>
-            <div class="row">
-              <div class="k">票数</div>
-              <div class="v">{{ detail.item.ticketCount }}</div>
-            </div>
-            <div class="row">
-              <div class="k">单价</div>
-              <div class="v">{{ fenToYuan(detail.item.unitPrice) }} 元</div>
-            </div>
-
-            <div class="section-title" style="margin-top: 10px;">快照</div>
-            <div v-if="snapshotParsed" class="snapshot">
-              <div class="row">
-                <div class="k">startTime</div>
-                <div class="v mono">{{ snapshotParsed.startTime || '-' }}</div>
-              </div>
-              <div class="row">
-                <div class="k">price</div>
-                <div class="v">{{ fenToYuan(snapshotParsed.price) }} 元</div>
-              </div>
-              <div class="row">
-                <div class="k">screeningId</div>
-                <div class="v mono">{{ snapshotParsed.screeningId || '-' }}</div>
-              </div>
-            </div>
-            <pre v-else class="snapshot-raw">{{ detail.item.snapshot }}</pre>
-          </div>
-
           <div class="actions">
             <el-button size="small" text @click="copy(detail.orderNo)">复制订单号</el-button>
 
